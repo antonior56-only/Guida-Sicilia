@@ -2247,9 +2247,13 @@ let ITINERARI_PREDEFINITI = [
 
 // Carica il JSON esterno poi avvia il processing
 async function caricaDatiEsterni() {
+  // Path relativo all'HTML corrente — funziona sia in locale che su GitHub Pages
+  // indipendentemente dal nome del repository
+  const baseUrl = window.location.href.replace(/\/[^\/]*$/, '/');
+  const jsonUrl = baseUrl + 'dati_sicilia.json';
   try {
-    const res = await fetch('dati_sicilia.json');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const res = await fetch(jsonUrl);
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' — ' + jsonUrl);
     const data = await res.json();
     // Svuota e ricarica DATI_SICILIA
     DATI_SICILIA.length = 0;
