@@ -981,7 +981,17 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--cream);c
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
 /* Responsive mobile */
+/* Barra azioni mobile: nascosta su desktop, visibile su mobile */
+#mobile-actions-bar{ display:none }
+
 @media(max-width:768px){
+  /* Mostra barra azioni mobile */
+  #mobile-actions-bar{ display:block !important }
+  /* Header compatto: solo titolo + ☰ + 📍 */
+  #header{ padding:0 10px; height:54px; }
+  #main{ margin-top:54px; height:calc(100vh - 54px) }
+  #map-container{ height:calc(100vh - 54px) }
+  .hdr-nav{ gap:3px }
   #sidebar{width:100%;position:fixed;bottom:0;left:0;right:0;top:58px;z-index:1050;
     transform:translateX(-100%);transition:transform .3s}
   #sidebar.open{transform:translateX(0)}
@@ -1431,6 +1441,74 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--cream);c
 }
 #wz-zona:focus{border-color:var(--sage)}
 
+
+/* ── MODAL CAMBIO PIN ADMIN ── */
+#pin-modal{
+  position:fixed;inset:0;z-index:9998;
+  background:rgba(0,0,0,.55);
+  display:none;align-items:center;justify-content:center;
+}
+#pin-modal.open{display:flex}
+#pin-modal-box{
+  background:#fff;border-radius:16px;padding:28px 24px;
+  width:90%;max-width:340px;
+  box-shadow:0 20px 60px rgba(0,0,0,.3);
+}
+#pin-modal-box h3{
+  font-family:'Cormorant Garamond',serif;font-size:20px;
+  color:var(--forest);margin:0 0 4px;
+}
+#pin-modal-box p{
+  font-size:12px;color:var(--muted);margin:0 0 18px;line-height:1.4;
+}
+.pin-field{margin-bottom:12px}
+.pin-field label{
+  font-size:11px;font-weight:700;color:var(--stone);
+  display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em;
+}
+.pin-field input{
+  width:100%;padding:9px 12px;border:1.5px solid var(--border);
+  border-radius:8px;font-size:15px;letter-spacing:3px;
+  font-family:'DM Sans',sans-serif;outline:none;box-sizing:border-box;
+}
+.pin-field input:focus{border-color:var(--sage)}
+#pin-modal-error{
+  font-size:12px;color:var(--rust);min-height:16px;margin-bottom:10px;
+}
+#pin-modal-ok{
+  font-size:12px;color:var(--sage);min-height:16px;margin-bottom:10px;
+  font-weight:600;
+}
+.pin-modal-btns{display:flex;gap:8px}
+.btn-pin-save{
+  flex:1;padding:10px;border:none;border-radius:8px;
+  background:var(--forest);color:#fff;font-weight:700;
+  font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;
+  transition:background .2s;
+}
+.btn-pin-save:hover{background:var(--sage)}
+.btn-pin-cancel{
+  padding:10px 16px;border:1.5px solid var(--border);border-radius:8px;
+  background:#fff;color:var(--stone);font-weight:600;font-size:13px;
+  cursor:pointer;font-family:'DM Sans',sans-serif;
+}
+
+
+.wz-tappa-badge-ext{
+  font-size:9px;font-weight:700;background:#e8f4fd;color:#0d4f6e;
+  border:1px solid #b3d9f0;border-radius:4px;padding:1px 5px;
+  margin-left:5px;vertical-align:middle;white-space:nowrap;
+}
+.wz-tappa-badge-app{
+  font-size:9px;font-weight:700;background:#e8f5e9;color:#2e7d32;
+  border:1px solid #a5d6a7;border-radius:4px;padding:1px 5px;
+  margin-left:5px;vertical-align:middle;white-space:nowrap;
+}
+.wz-geocoding{
+  display:flex;align-items:center;gap:6px;
+  font-size:11px;color:var(--muted);padding:6px 0;
+}
+
 /* ── ADMIN-ONLY ELEMENTS ── */
 .admin-only{ display:none !important }
 body.is-admin .admin-only{ display:inline-flex !important }
@@ -1474,21 +1552,22 @@ body.is-admin .admin-only-block{ display:block !important }
   <h1>⛵ Sicilia <span class="hide-mobile" data-i18n="header_title">Esplora l'Isola</span></h1>
   <div class="hdr-nav">
     <!-- Badge ruolo + pulsante lingua -->
-    <div id="lang-switcher" title="Cambia lingua / Change language">
+    <div id="lang-switcher" title="Cambia lingua / Change language" class="hide-mobile">
       <button class="lang-flag-btn active" id="btn-lang-it" onclick="setLang('it')" title="Italiano">🇮🇹<span class="lang-label">IT</span></button>
       <button class="lang-flag-btn" id="btn-lang-en" onclick="setLang('en')" title="English">🇬🇧<span class="lang-label">EN</span></button>
     </div>
-    <button id="role-badge" class="user" onclick="logoutToLogin()" title="Clicca per uscire / Click to logout">👤 <span id="role-label" data-i18n="role_user">Visitatore</span></button>
+    <button id="role-badge" class="user hide-mobile" onclick="logoutToLogin()" title="Clicca per uscire / Click to logout">👤 <span id="role-label" data-i18n="role_user">Visitatore</span></button>
+    <button class="hdr-btn admin-only hide-mobile" onclick="apriCambioPIN()" title="Cambia PIN / Change PIN" style="padding:6px 9px;font-size:14px">⚙️</button>
 
     <input type="file" id="vision-upload" accept="image/*" capture="environment" style="display:none" onchange="analizzaFotoAI(event)"/>
-    <button class="hdr-btn" onclick="document.getElementById('vision-upload').click()" aria-label="Riconoscimento visivo AI" title="Scatta o carica foto per riconoscerla" style="background:var(--sage);border-color:var(--sage)">📸 <span class="txt-hide-mob" data-i18n="btn_foto">Cos'è?</span></button>
+    <button class="hdr-btn hide-mobile" onclick="document.getElementById('vision-upload').click()" aria-label="Riconoscimento visivo AI" title="Scatta o carica foto per riconoscerla" style="background:var(--sage);border-color:var(--sage)">📸 <span class="txt-hide-mob" data-i18n="btn_foto">Cos'è?</span></button>
     
-    <button class="hdr-btn" id="btn-preferiti-toggle" onclick="togglePreferiti()" aria-label="Mostra preferiti" title="Filtra solo i tuoi luoghi del cuore" style="background:var(--forest);border-color:#ff4d4d;color:#ff4d4d">❤️ <span class="txt-hide-mob" data-i18n="btn_preferiti">Preferiti</span></button>
+    <button class="hdr-btn hide-mobile" id="btn-preferiti-toggle" onclick="togglePreferiti()" aria-label="Mostra preferiti" title="Filtra solo i tuoi luoghi del cuore" style="background:var(--forest);border-color:#ff4d4d;color:#ff4d4d">❤️ <span class="txt-hide-mob" data-i18n="btn_preferiti">Preferiti</span></button>
     
-    <button class="hdr-btn" onclick="mostraPassaporto()" aria-label="Apri Passaporto e Check-in" title="Il tuo Passaporto della Sicilia" style="background:#27ae60;border-color:#27ae60">📘 <span class="txt-hide-mob" data-i18n="btn_passaporto">Passaporto</span></button>
+    <button class="hdr-btn hide-mobile" onclick="mostraPassaporto()" aria-label="Apri Passaporto e Check-in" title="Il tuo Passaporto della Sicilia" style="background:#27ae60;border-color:#27ae60">📘 <span class="txt-hide-mob" data-i18n="btn_passaporto">Passaporto</span></button>
 
     <button class="hdr-btn mob-toggle" aria-label="Apri menu laterale" onclick="toggleSidebar()">☰</button>
-    <button class="hdr-btn" onclick="locateUser()" aria-label="Trova la mia posizione" title="Trova la mia posizione">📍 <span class="txt-hide-mob" data-i18n="btn_posizione">Posizione</span></button>
+    <button class="hdr-btn" onclick="locateUser()" aria-label="Trova la mia posizione" title="Trova la mia posizione">📍</button>
     <button class="hdr-btn hide-mobile" onclick="fitAll()" aria-label="Mostra tutti i punti sulla mappa" title="Mostra tutti i punti">🗺 <span data-i18n="btn_tutto">Tutto</span></button>
     <button class="hdr-btn hide-mobile" onclick="clearRoute()" aria-label="Cancella percorso tracciato" title="Ripristina percorso">↺ <span data-i18n="btn_reset">Reset</span></button>
   </div>
@@ -1508,6 +1587,21 @@ body.is-admin .admin-only-block{ display:block !important }
     <div id="tabs-scroll-hint">›</div>
     </div><!-- #tabs-wrapper -->
     <div id="sidebar-content">
+
+      <!-- Barra azioni rapide — visibile solo su mobile via CSS -->
+      <div id="mobile-actions-bar" style="padding:4px 0 0">
+        <div style="display:flex;gap:5px;margin-bottom:5px">
+          <button class="btn" style="flex:1;font-size:11px;padding:7px 3px;background:var(--sage)" onclick="document.getElementById('vision-upload').click()">📸 <span data-i18n="btn_foto">Cos'è?</span></button>
+          <button class="btn" style="flex:1;font-size:11px;padding:7px 3px;background:var(--forest);border-color:#ff4d4d;color:#ff4d4d" onclick="togglePreferiti()">❤️ <span data-i18n="btn_preferiti">Preferiti</span></button>
+          <button class="btn" style="flex:1;font-size:11px;padding:7px 3px;background:#27ae60" onclick="mostraPassaporto()">📘 <span data-i18n="btn_passaporto">Passaporto</span></button>
+        </div>
+        <div style="display:flex;gap:5px;margin-bottom:8px">
+          <button class="btn btn-outline" style="flex:1;font-size:11px;padding:6px 3px" onclick="setLang('it')">🇮🇹 IT</button>
+          <button class="btn btn-outline" style="flex:1;font-size:11px;padding:6px 3px" onclick="setLang('en')">🇬🇧 EN</button>
+          <button class="btn btn-outline" style="flex:2;font-size:11px;padding:6px 3px;color:var(--rust)" onclick="logoutToLogin()">👤 <span data-i18n="mobile_logout">Esci</span></button>
+        </div>
+        <hr style="border:none;border-top:1px solid var(--border);margin:0 -12px 10px"/>
+      </div>
 
       <div class="panel active" id="panel-luoghi">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -2144,28 +2238,7 @@ function escapeHTML(str) {
 // ═══════════════════════════════════════════════════════════
 
 // Sostituisci questo array con l'intero contenuto del tuo file 'sicilia_master_AGGIORNATO.json'
-const DATI_SICILIA = [
-  { "id": "sic_0001", "nome": "Bosco di Centorbi", "categoria_originale": "Area per passeggiate", "macro_categoria": "natura", "rating": 4.4, "recensioni": 24, "provincia": "EN", "lat": 37.4435, "lon": 14.4789, "tags": ["natura"], "comune": "Aidone" },
-  { "id": "sic_0002", "nome": "Piano dei Grilli", "categoria_originale": "Parco selvatico", "macro_categoria": "natura", "rating": 4.8, "recensioni": 141, "provincia": "CT", "lat": 37.755, "lon": 14.8872, "tags": ["natura"], "comune": "Bronte" },
-  { "id": "sic_0003", "nome": "Chiesa della Badia di Sant'Agata", "categoria_originale": "Chiesa cattolica", "macro_categoria": "spiritualita", "rating": 4.7, "recensioni": 345, "provincia": "CT", "lat": 37.502, "lon": 15.087, "tags": ["religione", "cultura"], "comune": "Catania" },
-  { "id": "sic_0004", "nome": "Valle dei Templi", "categoria_originale": "Sito archeologico", "macro_categoria": "cultura", "rating": 4.8, "recensioni": 45000, "provincia": "AG", "lat": 37.2902, "lon": 13.5864, "tags": ["storia"], "comune": "Agrigento" },
-  { "id": "sic_0005", "nome": "Riserva dello Zingaro", "categoria_originale": "Riserva naturale sentiero", "macro_categoria": "natura", "rating": 4.9, "recensioni": 12000, "provincia": "TP", "lat": 38.1061, "lon": 12.7844, "tags": ["trekking", "mare"], "comune": "San Vito Lo Capo" },
-  { "id": "sic_0006", "nome": "Teatro Antico di Taormina", "categoria_originale": "Monumento storico", "macro_categoria": "cultura", "rating": 4.8, "recensioni": 32000, "provincia": "ME", "lat": 37.8525, "lon": 15.2922, "tags": ["storia", "spettacolo"], "comune": "Taormina" },
-  { "id": "sic_0007", "nome": "Trattoria La Foglia", "categoria_originale": "Ristorante", "macro_categoria": "ristorazione", "rating": 4.5, "recensioni": 850, "provincia": "SR", "lat": 37.0601, "lon": 15.2942, "tags": ["cibo", "pesce"], "comune": "Siracusa" },
-  { "id": "sic_0008", "nome": "Osteria dei Vespri", "categoria_originale": "Ristorante", "macro_categoria": "ristorazione", "rating": 4.6, "recensioni": 1100, "provincia": "PA", "lat": 38.1156, "lon": 13.3614, "tags": ["cibo", "gourmet"], "comune": "Palermo" },
-  { "id": "sic_0009", "nome": "Grand Hotel Timeo", "categoria_originale": "Hotel 5 stelle", "macro_categoria": "ricettivita", "rating": 4.9, "recensioni": 2100, "provincia": "ME", "lat": 37.8518, "lon": 15.2915, "tags": ["lusso", "dormire"], "comune": "Taormina" },
-  { "id": "sic_0010", "nome": "Agriturismo Baglio Donnafranca", "categoria_originale": "Agriturismo", "macro_categoria": "ricettivita", "rating": 4.7, "recensioni": 650, "provincia": "TP", "lat": 37.9152, "lon": 12.5312, "tags": ["campagna", "dormire"], "comune": "Marsala" },
-  { "id": "sic_0011", "nome": "Erice Borgo Storico", "categoria_originale": "Borgo", "macro_categoria": "borgo", "rating": 4.8, "recensioni": 15000, "provincia": "TP", "lat": 38.0378, "lon": 12.5875, "tags": ["borgo", "storia"], "comune": "Erice" },
-  { "id": "sic_0012", "nome": "Cratere Centrale Etna", "categoria_originale": "Sentiero vulcano", "macro_categoria": "natura", "rating": 4.9, "recensioni": 8500, "provincia": "CT", "lat": 37.7510, "lon": 14.9934, "tags": ["trekking", "vulcano"], "comune": "Nicolosi" },
-  { "id": "sic_0013", "nome": "Gole dell'Alcantara", "categoria_originale": "Parco naturale", "macro_categoria": "natura", "rating": 4.6, "recensioni": 22000, "provincia": "ME", "lat": 37.8804, "lon": 15.1745, "tags": ["fiume", "natura"], "comune": "Motta Camastra" },
-  { "id": "sic_0014", "nome": "Duomo di Monreale", "categoria_originale": "Chiesa cattolica", "macro_categoria": "spiritualita", "rating": 4.9, "recensioni": 18000, "provincia": "PA", "lat": 38.0817, "lon": 13.2895, "tags": ["religione", "arte"], "comune": "Monreale" },
-  { "id": "sic_0015", "nome": "Antica Focacceria San Francesco", "categoria_originale": "Trattoria", "macro_categoria": "ristorazione", "rating": 4.3, "recensioni": 9500, "provincia": "PA", "lat": 38.1166, "lon": 13.3644, "tags": ["street food", "cibo"], "comune": "Palermo" },
-  { "id": "sic_0016", "nome": "B&B Ortigia Vista Mare", "categoria_originale": "B&B", "macro_categoria": "ricettivita", "rating": 4.8, "recensioni": 340, "provincia": "SR", "lat": 37.0585, "lon": 15.2950, "tags": ["dormire", "mare"], "comune": "Siracusa" },
-  { "id": "sic_0017", "nome": "Scala dei Turchi", "categoria_originale": "Attrazione naturale", "macro_categoria": "natura", "rating": 4.7, "recensioni": 28000, "provincia": "AG", "lat": 37.2925, "lon": 13.4722, "tags": ["mare", "scogliera"], "comune": "Realmonte" },
-  { "id": "sic_0018", "nome": "Cefalù Spiaggia e Borgo", "categoria_originale": "Borgo", "macro_categoria": "borgo", "rating": 4.8, "recensioni": 21000, "provincia": "PA", "lat": 38.0386, "lon": 14.0228, "tags": ["mare", "borgo"], "comune": "Cefalù" },
-  { "id": "sic_0019", "nome": "Ibla - Borgo Barocco", "categoria_originale": "Borgo", "macro_categoria": "borgo", "rating": 4.9, "recensioni": 14000, "provincia": "RG", "lat": 36.9265, "lon": 14.7445, "tags": ["barocco", "storia"], "comune": "Ragusa" },
-  { "id": "sic_0020", "nome": "Ristorante Crocifisso", "categoria_originale": "Ristorante", "macro_categoria": "ristorazione", "rating": 4.7, "recensioni": 900, "provincia": "SR", "lat": 36.8920, "lon": 15.0680, "tags": ["gourmet", "cibo"], "comune": "Noto" }
-];
+const DATI_SICILIA = []; // Caricato da dati_sicilia.json
 
 const LUOGHI = [];
 const SENTIERI = [];
@@ -2197,6 +2270,29 @@ let ITINERARI_PREDEFINITI = [
   }
 ];
 
+// Carica il JSON esterno poi avvia il processing
+async function caricaDatiEsterni() {
+  // Calcola URL robusto: funziona su GitHub Pages, locale e qualsiasi path
+  const baseUrl = window.location.href.split('?')[0].replace(/\/[^\/]*$/, '/');
+  const jsonUrl = baseUrl + 'dati_sicilia.json';
+  try {
+    // Prima prova il path calcolato, poi fallback con './'
+    let res = await fetch(jsonUrl);
+    if (!res.ok) res = await fetch('./dati_sicilia.json');
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' — ' + jsonUrl);
+    const data = await res.json();
+    // Svuota e ricarica DATI_SICILIA
+    DATI_SICILIA.length = 0;
+    data.forEach(d => DATI_SICILIA.push(d));
+  } catch(e) {
+    console.warn('[Dati] Impossibile caricare dati_sicilia.json:', e.message);
+    // Fallback: l'app parte con dati vuoti ma funzionante
+  }
+  processaDatiJSON();
+  // Prosegue con il resto dell'init (mappa, render, ecc.)
+  avviaApp();
+}
+
 // Elabora il JSON grezzo per instradare gli oggetti nei vari contenitori dell'app
 function processaDatiJSON() {
     DATI_SICILIA.forEach(item => {
@@ -2226,6 +2322,16 @@ function processaDatiJSON() {
         else {
             let catMapped = macro;
             if (macro === 'spiritualita') catMapped = 'religioso';
+            else if (macro === 'musei_cultura') catMapped = 'cultura';
+            else if (macro === 'castelli_fortificazioni') catMapped = 'cultura';
+            else if (macro === 'archeologia') catMapped = 'cultura';
+            else if (macro === 'ospitalita') catMapped = 'ricettivita';
+            else if (macro === 'enogastronomia') catMapped = 'gastronomia';
+            else if (macro === 'agricoltura') catMapped = 'agriturismo';
+            else if (macro === 'esperienze_servizi') catMapped = 'altro';
+            else if (macro === 'benessere') catMapped = 'altro';
+            else if (macro === 'shopping') catMapped = 'shopping';
+            else if (macro === 'varie') catMapped = 'altro';
             else if (macro === 'nan' || !macro) catMapped = 'altro';
             LUOGHI.push({ name: nome, cat: catMapped, coords: coords, desc: desc, pop: pop, voto: rating, prov: item.provincia||'', comune: loc, tags: (item.tags||[]) });
         }
@@ -3264,7 +3370,9 @@ function ripristinaItinerari() {
 
 // ── BACKUP / RESTORE ──
 function exportData(){
-  const data={ LUOGHI_CUSTOM, SENTIERI_CUSTOM, RISTORANTI_CUSTOM, ALLOGGI_CONSIGLIATI, ITINERARI_CUSTOM, VALUTAZIONI, CHECKINS, NOTE_PERSONALI }; 
+  const adminHash = localStorage.getItem('sicilia_admin_hash');
+  const data={ LUOGHI_CUSTOM, SENTIERI_CUSTOM, RISTORANTI_CUSTOM, ALLOGGI_CONSIGLIATI, ITINERARI_CUSTOM, VALUTAZIONI, CHECKINS, NOTE_PERSONALI,
+    ...(adminHash ? { ADMIN_PIN_HASH: adminHash } : {}) }; 
   const blob=new Blob([JSON.stringify(data)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a'); a.href=url; a.download='sicilia_backup.json';
@@ -3285,6 +3393,7 @@ function importData(e){
       if(d.VALUTAZIONI) localStorage.setItem('sicilia_valutazioni', JSON.stringify(d.VALUTAZIONI));
       if(d.CHECKINS) localStorage.setItem('sicilia_checkins', JSON.stringify(d.CHECKINS));
       if(d.NOTE_PERSONALI) localStorage.setItem('sicilia_note', JSON.stringify(d.NOTE_PERSONALI));
+      if(d.ADMIN_PIN_HASH) localStorage.setItem('sicilia_admin_hash', d.ADMIN_PIN_HASH);
       showToast("Dati importati! Ricarico l'app...");
       setTimeout(()=>location.reload(), 1500);
     }catch(err){ showToast("Errore nel formato del file"); }
@@ -3576,12 +3685,12 @@ function askForApiKeyModal() {
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;display:flex;align-items:center;justify-content:center;';
     overlay.innerHTML = `
       <div style="background:#fff;padding:24px;border-radius:16px;width:90%;max-width:380px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.3)">
-        <h3 style="font-family:'Cormorant Garamond',serif;color:var(--forest);font-size:22px;margin-bottom:8px">🔑 API Key richiesta</h3>
-        <p style="font-size:13px;color:var(--muted);line-height:1.4;margin-bottom:16px">Inserisci la tua API Key gratuita di Gemini per attivare l'Intelligenza Artificiale.</p>
-        <input type="text" id="temp-api-key" placeholder="Incolla qui la chiave..." style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:12px;font-family:'DM Sans',sans-serif;outline:none;font-size:13px">
+        <h3 style="font-family:'Cormorant Garamond',serif;color:var(--forest);font-size:22px;margin-bottom:8px">🔑 ${t('apikey_title')}</h3>
+        <p style="font-size:13px;color:var(--muted);line-height:1.4;margin-bottom:16px">${t('apikey_desc')}</p>
+        <input type="text" id="temp-api-key" placeholder="${t('apikey_ph')}" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:12px;font-family:'DM Sans',sans-serif;outline:none;font-size:13px">
         <div style="display:flex;gap:8px">
-          <button id="btn-cancel-key" style="flex:1;background:transparent;border:1px solid var(--border);color:var(--stone);padding:10px;border-radius:8px;cursor:pointer;font-weight:600">Annulla</button>
-          <button id="btn-save-key" style="flex:1;background:var(--gold);color:#fff;border:none;padding:10px;border-radius:8px;cursor:pointer;font-weight:700">Salva in locale</button>
+          <button id="btn-cancel-key" style="flex:1;background:transparent;border:1px solid var(--border);color:var(--stone);padding:10px;border-radius:8px;cursor:pointer;font-weight:600">${t('pin_btn_annulla')}</button>
+          <button id="btn-save-key" style="flex:1;background:var(--gold);color:#fff;border:none;padding:10px;border-radius:8px;cursor:pointer;font-weight:700">${t('apikey_btn_salva')}</button>
         </div>
       </div>
     `;
@@ -3591,19 +3700,32 @@ function askForApiKeyModal() {
   });
 }
 
-async function fetchGeminiWithRetry(payload, isJson = false, isVision = false, retryCount = 0) {
-  const MAX_RETRIES = 2; // FIX: limite massimo di tentativi con nuova API key
+async function fetchGeminiWithRetry(payload, isJson = false, isVision = false, retryCount = 0, jsonSchema = null) {
+  const MAX_RETRIES = 2;
   let activeKey = localStorage.getItem('sicilia_gemini_key') || apiKey;
+
+  // Se non c'è alcuna key disponibile, chiedi subito prima di fare la chiamata
+  if (!activeKey) {
+    const newKey = await askForApiKeyModal();
+    if (!newKey) throw new Error("API Key annullata");
+    localStorage.setItem('sicilia_gemini_key', newKey);
+    activeKey = newKey;
+  }
+
   if (isJson) {
-    payload.generationConfig = {
-      responseMimeType: "application/json",
-      responseSchema: {
+    if (jsonSchema === false) {
+      // Wizard: solo JSON libero, nessuno schema rigido (evita timeout/troncamenti)
+      payload.generationConfig = { responseMimeType: "application/json" };
+    } else {
+      // Altre funzioni: schema strutturato tappe[]
+      const schema = jsonSchema || {
         type: "OBJECT", properties: {
           name: { type: "STRING" }, desc: { type: "STRING" }, giorni: { type: "INTEGER" },
           km: { type: "INTEGER" }, tappe: { type: "ARRAY", items: { type: "STRING" } }
         }, required: ["name", "desc", "giorni", "km", "tappe"]
-      }
-    };
+      };
+      payload.generationConfig = { responseMimeType: "application/json", responseSchema: schema };
+    }
   }
 
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${activeKey}`;
@@ -3614,7 +3736,7 @@ async function fetchGeminiWithRetry(payload, isJson = false, isVision = false, r
       const newKey = await askForApiKeyModal();
       if (newKey) {
         localStorage.setItem('sicilia_gemini_key', newKey);
-        return fetchGeminiWithRetry(payload, isJson, isVision, retryCount + 1);
+        return fetchGeminiWithRetry(payload, isJson, isVision, retryCount + 1, jsonSchema);
       }
       throw new Error("API Key annullata");
     }
@@ -3843,37 +3965,50 @@ function wzFiltraLuoghiPerZona(zona) {
 }
 
 // ── Genera itinerario con AI ──
+
+// ── Geocodifica tappa con Nominatim (OSM) ──
+async function geocodeTappa(nome, zonaHint) {
+  const query = `${nome}, ${zonaHint || 'Sicilia'}, Italy`;
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'it' } });
+    const data = await res.json();
+    if (data && data[0]) {
+      return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+    }
+  } catch(e) {}
+  return null;
+}
+
 async function generaItinerarioWizard() {
   const vals = wzGetValues();
-
   const btn = document.getElementById('btn-wz-genera');
   btn.innerHTML = `<span class="spinner" style="border-top-color:#fff"></span> ${t('ai_generazione')}`;
   btn.disabled = true;
 
-  // Filtra luoghi per zona
+  // Luoghi dell'app filtrati per zona (suggeriti all'AI, non obbligatori)
   const luoghiFiltrati = wzFiltraLuoghiPerZona(vals.zona);
-  if (luoghiFiltrati && luoghiFiltrati.length === 0) {
-    showToast(t('wz_nessun_risultato'));
-    btn.innerHTML = t('btn_crea_itin'); btn.disabled = false;
-    return;
-  }
-
-  // Prepara lista luoghi per il prompt
-  const allPlaces = (luoghiFiltrati || [...LUOGHI, ...RISTORANTI, ...SENTIERI]).slice(0, 60);
-  const luoghiStr = allPlaces.map(p => `"${p.name}" (${p.comune||p.prov||'Sicilia'}, ${p.cat||p.tipo||''}, tags:[${(p.tags||[]).join(',')}])`).join('; ');
+  const appPlaces = (luoghiFiltrati && luoghiFiltrati.length > 0
+    ? luoghiFiltrati
+    : [...LUOGHI, ...RISTORANTI, ...SENTIERI]).slice(0, 50);
+  const luoghiAppStr = appPlaces.map(p =>
+    `"${p.name}" (${p.comune||p.prov||'Sicilia'}, ${p.cat||p.tipo||''}, tags:[${(p.tags||[]).join(',')}])`
+  ).join('; ');
 
   const budgetMap = { economico: currentLang==='en'?'budget':'economico', medio: currentLang==='en'?'mid-range':'medio', alto: currentLang==='en'?'luxury':'alto' };
   const chiMap    = { solo: currentLang==='en'?'solo traveller':'viaggiatore solo', coppia: currentLang==='en'?'couple':'coppia', famiglia: currentLang==='en'?'family with children':'famiglia con bambini', amici: currentLang==='en'?'group of friends':'gruppo di amici' };
-
-  const langInstr = currentLang === 'en'
-    ? 'Reply ONLY in English.'
-    : 'Rispondi SOLO in italiano.';
+  const langInstr = currentLang === 'en' ? 'Reply ONLY in English.' : 'Rispondi SOLO in italiano.';
 
   const systemPrompt = `Sei un travel planner esperto della Sicilia. ${langInstr}
 Crea un itinerario di ${vals.giorni} giorni per: ${chiMap[vals.chi]}, budget ${budgetMap[vals.budget]}, interessi: ${vals.interessi.join(', ') || 'generali'}.
 Zona richiesta: ${vals.zona || 'Sicilia intera'}.
-Scegli le tappe ESCLUSIVAMENTE da questo elenco (copia il nome ESATTO): ${luoghiStr}.
-Distribuisci le tappe nei giorni in modo logico (max 3-4 tappe/giorno). Includi almeno 1 ristorante se disponibile.
+
+Hai a disposizione questi luoghi già presenti nell'app — usali con PREFERENZA quando sono pertinenti (copia il nome ESATTO):
+${luoghiAppStr || 'nessuno per questa zona'}.
+
+Puoi aggiungere liberamente altri luoghi REALI della Sicilia non presenti nell'elenco sopra, per rendere l'itinerario più completo e interessante. Per queste tappe aggiuntive aggiungi "esterno": true.
+Distribuisci le tappe nei giorni in modo logico (max 4 tappe/giorno). Includi almeno 1 ristorante per giorno se possibile.
+
 Rispondi SOLO con questo JSON (nessun testo fuori dal JSON):
 {
   "name": "Nome evocativo itinerario",
@@ -3883,48 +4018,62 @@ Rispondi SOLO con questo JSON (nessun testo fuori dal JSON):
       "g": 1,
       "titolo": "Titolo giornata",
       "tappe": [
-        {"nome": "Nome esatto luogo", "orario": "10:00", "nota": "Breve nota (max 20 parole)"}
+        {"nome": "Nome luogo", "orario": "10:00", "nota": "Breve nota (max 20 parole)", "esterno": false},
+        {"nome": "Altro luogo non in app", "orario": "15:00", "nota": "Breve nota", "esterno": true}
       ]
     }
   ]
 }`;
 
   const payload = {
-    contents: [{ parts: [{ text: `Crea itinerario per ${vals.zona||'Sicilia'}, ${vals.giorni} giorni, ${vals.chi}, ${vals.budget}, interessi: ${vals.interessi.join(',')||'vari'}` }] }],
+    contents: [{ parts: [{ text: `Crea itinerario: ${vals.zona||'Sicilia'}, ${vals.giorni} giorni, ${vals.chi}, ${vals.budget}, interessi: ${vals.interessi.join(',')||'vari'}` }] }],
     systemInstruction: { parts: [{ text: systemPrompt }] }
   };
 
   try {
-    const raw = await fetchGeminiWithRetry(payload, true);
+    const raw = await fetchGeminiWithRetry(payload, true, false, 0, false);
     wzItinGenerato = raw;
     wzItinGenerato._vals = vals;
 
-    // Risolvi tappe contro dati app
+    // Risolvi tappe: match con dati app o segna come esterna
     const allRef = [...LUOGHI, ...RISTORANTI, ...SENTIERI, ...ALLOGGI_CONSIGLIATI];
-    wzTappeCorrente = [];
+    const tappeGrezze = [];
     (raw.giorni || []).forEach(gObj => {
       (gObj.tappe || []).forEach(tp => {
         const tL = (tp.nome||'').toLowerCase().trim();
         const match = allRef.find(p => p.name.toLowerCase() === tL)
                    || allRef.find(p => p.name.toLowerCase().includes(tL) || tL.includes(p.name.toLowerCase().split(' ')[0]));
-        if (match) {
-          wzTappeCorrente.push({
-            nome:   match.name,
-            giorno: gObj.g || 1,
-            titolo: gObj.titolo || '',
-            orario: tp.orario || '',
-            nota:   tp.nota || '',
-            coords: Array.isArray(match.coords[0]) ? match.coords[0] : match.coords
-          });
-        }
+        tappeGrezze.push({
+          nome:     match ? match.name : (tp.nome||''),
+          giorno:   gObj.g || 1,
+          titolo:   gObj.titolo || '',
+          orario:   tp.orario || '',
+          nota:     tp.nota || '',
+          esterno:  match ? false : true,
+          coords:   match ? (Array.isArray(match.coords[0]) ? match.coords[0] : match.coords) : null
+        });
       });
     });
 
-    if (wzTappeCorrente.length === 0) throw new Error('nessuna tappa valida');
+    if (tappeGrezze.length === 0) throw new Error('nessuna tappa');
 
+    // Geocodifica tappe esterne
+    const esterne = tappeGrezze.filter(tp => tp.esterno && !tp.coords);
+    if (esterne.length > 0) {
+      btn.innerHTML = `<span class="spinner" style="border-top-color:#fff"></span> ${t('wz_geocodifica')}`;
+      for (const tp of esterne) {
+        const coords = await geocodeTappa(tp.nome, vals.zona || 'Sicilia');
+        tp.coords = coords; // null se non trovate — gestito in wzRenderTappe
+        // Piccola pausa per rispettare Nominatim rate limit (1 req/s)
+        await new Promise(r => setTimeout(r, 1100));
+      }
+    }
+
+    wzTappeCorrente = tappeGrezze;
     wzMostraRisultato(raw.name, raw.desc, vals);
   } catch(e) {
-    showToast(t('wz_genera_err'));
+    console.error('[WizardAI] Errore:', e);
+    showToast(t('wz_genera_err') + ' (' + (e.message||'').slice(0,40) + ')');
   } finally {
     btn.innerHTML = t('btn_crea_itin'); btn.disabled = false;
   }
@@ -3953,10 +4102,15 @@ function wzRenderTappe() {
     const div = document.createElement('div');
     div.className = 'wz-tappa';
     div.id = 'wz-tappa-' + i;
+    const badgeHtml = tp.esterno
+      ? `<span class="wz-tappa-badge-ext">${t('badge_ext')}</span>`
+      : `<span class="wz-tappa-badge-app">${t('badge_app')}</span>`;
+    const coordsWarning = tp.esterno && !tp.coords
+      ? `<span style="font-size:10px;color:var(--rust)"> ${t('wz_tappa_geocod_err')}</span>` : '';
     div.innerHTML = `
       <div class="wz-tappa-day">${t('wz_giorno_label')} ${tp.giorno}</div>
       <div class="wz-tappa-body">
-        <div class="wz-tappa-name">${tp.nome}</div>
+        <div class="wz-tappa-name">${tp.nome}${badgeHtml}${coordsWarning}</div>
         <div class="wz-tappa-meta">${tp.orario ? '⏰ '+tp.orario : ''}${tp.titolo ? ' · '+tp.titolo : ''}</div>
         ${tp.nota ? `<div class="wz-tappa-nota">${tp.nota}</div>` : ''}
       </div>
@@ -3981,7 +4135,7 @@ function wzMoveTappa(idx, dir) {
 // ── Disegna percorso sulla mappa ──
 function wzDisegnaMappa() {
   if (typeof clearRoute === 'function') clearRoute();
-  const coords = wzTappeCorrente.map(tp => tp.coords).filter(Boolean);
+  const coords = wzTappeCorrente.map(tp => tp.coords).filter(c => c && c.length === 2 && !isNaN(c[0]));
   if (!coords.length) return;
   if (typeof map !== 'undefined' && window.L) {
     if (window._wzLine) { map.removeLayer(window._wzLine); }
@@ -4437,6 +4591,38 @@ const TRANSLATIONS = {
     wz_salva_ok: 'Itinerario salvato!',
     wz_inserisci_nome: "Inserisci un nome per l'itinerario.",
     wz_genera_err: 'Errore nella generazione. Riprova o sii più specifico.',
+    mobile_logout: '👤 Esci / Cambia ruolo',
+    apikey_title: 'API Key richiesta',
+    apikey_desc: "Inserisci la tua API Key gratuita di Gemini per attivare l'Intelligenza Artificiale. Ottienila su aistudio.google.com",
+    apikey_ph: 'Incolla qui la chiave...',
+    apikey_btn_salva: 'Salva in locale',
+    badge_app: '📍 App',
+    badge_ext: '🌐 Esterno',
+    wz_geocodifica: 'Geocodifica tappe esterne in corso...',
+    wz_tappa_geocod_err: '(posizione non trovata)',
+    wz_nessun_risultato: "Nessun luogo trovato per questa zona. L'AI userà la sua conoscenza della Sicilia.",
+    pin_modal_title: 'Cambia PIN Amministratore',
+    pin_modal_desc: 'Il nuovo PIN viene salvato nel browser. Includilo nel backup JSON per non perderlo.',
+    pin_attuale_label: 'PIN attuale',
+    pin_nuovo_label: 'Nuovo PIN (min. 6 caratteri)',
+    pin_conferma_label: 'Conferma nuovo PIN',
+    pin_btn_annulla: 'Annulla',
+    pin_btn_salva: '🔐 Aggiorna PIN',
+    pin_err_attuale: 'PIN attuale non corretto.',
+    pin_err_corto: 'Il nuovo PIN deve avere almeno 6 caratteri.',
+    pin_err_match: 'I due PIN non coincidono.',
+    pin_ok: '✅ PIN aggiornato con successo!',
+    cat_musei_cultura: 'Musei e Cultura',
+    cat_castelli_fortificazioni: 'Castelli',
+    cat_archeologia: 'Archeologia',
+    cat_ospitalita: 'Ospitalità',
+    cat_enogastronomia: 'Enogastronomia',
+    cat_agricoltura: 'Agricoltura',
+    cat_esperienze_servizi: 'Esperienze',
+    cat_benessere: 'Benessere',
+    cat_shopping: 'Shopping',
+    cat_varie: 'Varie',
+    cat_ricettivita: 'Ricettività',
   },
   en: {
     // Login
@@ -4630,6 +4816,27 @@ const TRANSLATIONS = {
     wz_salva_ok: 'Itinerary saved!',
     wz_inserisci_nome: 'Please enter a name for the itinerary.',
     wz_genera_err: 'Generation error. Please retry or be more specific.',
+    mobile_logout: '👤 Exit / Change role',
+    apikey_title: 'API Key required',
+    apikey_desc: 'Enter your free Gemini API Key to activate Artificial Intelligence features. Get it at aistudio.google.com',
+    apikey_ph: 'Paste your key here...',
+    apikey_btn_salva: 'Save locally',
+    badge_app: '📍 App',
+    badge_ext: '🌐 External',
+    wz_geocodifica: 'Geocoding external stops...',
+    wz_tappa_geocod_err: '(location not found)',
+    wz_nessun_risultato: 'No places found for this area. AI will use its knowledge of Sicily.',
+    pin_modal_title: 'Change Administrator PIN',
+    pin_modal_desc: 'The new PIN is saved in the browser. Include it in the JSON backup to keep it safe.',
+    pin_attuale_label: 'Current PIN',
+    pin_nuovo_label: 'New PIN (min. 6 characters)',
+    pin_conferma_label: 'Confirm new PIN',
+    pin_btn_annulla: 'Cancel',
+    pin_btn_salva: '🔐 Update PIN',
+    pin_err_attuale: 'Current PIN is incorrect.',
+    pin_err_corto: 'New PIN must be at least 6 characters.',
+    pin_err_match: 'The two PINs do not match.',
+    pin_ok: '✅ PIN updated successfully!',
     cat_borgo_citta: '🏘 Village / Town',
     cat_cultura_arte: '🏛 Culture & Arts',
     cat_hotel: '🏨 Hotel',
@@ -4646,6 +4853,16 @@ const TRANSLATIONS = {
     btn_sommelier: '🧑‍🍳 What to order? (AI Tip)',
     cat_ristorazione: 'Dining',
     cat_ricettivita: 'Accommodation',
+    cat_musei_cultura: 'Museums & Culture',
+    cat_castelli_fortificazioni: 'Castles',
+    cat_archeologia: 'Archaeology',
+    cat_ospitalita: 'Hospitality',
+    cat_enogastronomia: 'Food & Wine',
+    cat_agricoltura: 'Agriculture',
+    cat_esperienze_servizi: 'Experiences',
+    cat_benessere: 'Wellness',
+    cat_shopping: 'Shopping',
+    cat_varie: 'Various',
     label_prezzo: 'Price range',
     label_citta: 'City',
     label_cerca_ta: 'Search on TripAdvisor',
@@ -4813,7 +5030,11 @@ function toggleLang() {
 // 1. Vai su https://emn178.github.io/online-tools/sha256.html
 // 2. Digita il tuo PIN e copia l'hash qui sotto
 // PIN DEFAULT: admin1234
-const ADMIN_PIN_HASH = 'ac9689e2272427085e35b9d3e3e8bed88cb3434828b43b86fc0596cad4c6e270'; // PIN: admin1234
+// Hash PIN admin — di default hardcoded, sovrascrivibile via localStorage
+const ADMIN_PIN_HASH_DEFAULT = 'ac9689e2272427085e35b9d3e3e8bed88cb3434828b43b86fc0596cad4c6e270'; // admin1234
+function getAdminHash() {
+  return localStorage.getItem('sicilia_admin_hash') || ADMIN_PIN_HASH_DEFAULT;
+}
 
 let currentRole = null; // 'admin' | 'user'
 
@@ -4833,7 +5054,7 @@ async function loginAs(role) {
       return;
     }
     const hash = await sha256(pin);
-    if (hash !== ADMIN_PIN_HASH) {
+    if (hash !== getAdminHash()) {
       document.getElementById('login-error').textContent =
         currentLang === 'en' ? '❌ Incorrect PIN.' : '❌ PIN non corretto.';
       document.getElementById('login-pin-input').value = '';
@@ -4869,6 +5090,53 @@ function applyRole() {
   }
 }
 
+
+// ── CAMBIO PIN ADMIN ──
+function apriCambioPIN() {
+  ['pin-attuale','pin-nuovo','pin-conferma'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('pin-modal-error').textContent = '';
+  document.getElementById('pin-modal-ok').textContent = '';
+  document.getElementById('pin-modal').classList.add('open');
+  setTimeout(() => document.getElementById('pin-attuale').focus(), 100);
+}
+
+function chiudiCambioPIN() {
+  document.getElementById('pin-modal').classList.remove('open');
+}
+
+async function salvaNuovoPIN() {
+  const errEl = document.getElementById('pin-modal-error');
+  const okEl  = document.getElementById('pin-modal-ok');
+  errEl.textContent = ''; okEl.textContent = '';
+
+  const attuale  = document.getElementById('pin-attuale').value;
+  const nuovo    = document.getElementById('pin-nuovo').value;
+  const conferma = document.getElementById('pin-conferma').value;
+
+  // Verifica PIN attuale
+  const hashAttuale = await sha256(attuale);
+  if (hashAttuale !== getAdminHash()) {
+    errEl.textContent = t('pin_err_attuale'); return;
+  }
+  // Lunghezza minima
+  if (nuovo.length < 6) {
+    errEl.textContent = t('pin_err_corto'); return;
+  }
+  // Corrispondenza
+  if (nuovo !== conferma) {
+    errEl.textContent = t('pin_err_match'); return;
+  }
+
+  const nuovoHash = await sha256(nuovo);
+  localStorage.setItem('sicilia_admin_hash', nuovoHash);
+
+  okEl.textContent = t('pin_ok');
+  // Chiudi dopo 1.5s
+  setTimeout(() => chiudiCambioPIN(), 1500);
+}
+
 function logoutToLogin() {
   const msg = currentLang === 'en'
     ? 'Log out and return to the login screen?'
@@ -4885,22 +5153,7 @@ function logoutToLogin() {
 // INIT MAPPA E APP
 // ═══════════════════════════════════════════════════════════
 window.onload = function() {
-  // Gestione hint scroll tab
-  const tabsEl = document.getElementById('tabs');
-  const hintEl = document.getElementById('tabs-scroll-hint');
-  function updateTabsHint() {
-    if (!tabsEl || !hintEl) return;
-    const hasOverflow = tabsEl.scrollWidth > tabsEl.clientWidth + 4;
-    const atEnd = tabsEl.scrollLeft + tabsEl.clientWidth >= tabsEl.scrollWidth - 4;
-    hintEl.style.display = (hasOverflow && !atEnd) ? 'flex' : 'none';
-  }
-  if (tabsEl) {
-    tabsEl.addEventListener('scroll', updateTabsHint);
-    window.addEventListener('resize', updateTabsHint);
-    setTimeout(updateTabsHint, 200);
-  }
-
-  // 0. Applica lingua salvata (prima di tutto, per avere UI corretta al login)
+  // 0. Applica lingua salvata (prima di tutto)
   applyLang();
 
   // 0b. Controlla se c'è già un ruolo in sessionStorage (refresh pagina)
@@ -4910,10 +5163,13 @@ window.onload = function() {
     applyRole();
     document.getElementById('login-screen').style.display = 'none';
   }
-  // Se non c'è ruolo salvato, il login-screen rimane visibile
 
-  // 1. Processa i dati provenienti dal JSON in memoria
-  processaDatiJSON();
+  // 1. Carica dati esterni → poi avviaApp()
+  caricaDatiEsterni();
+};
+
+// Inizializzazione app (chiamata dopo il caricamento dati)
+function avviaApp() {
   
   // 2. Carica i dati customizzati dell'utente e li unisce
   caricaDatiLocali();
@@ -4943,8 +5199,36 @@ window.onload = function() {
   renderItinerari();
   
   switchTab('luoghi');
-};
+}
 </script>
+
+<!-- ── MODAL CAMBIO PIN ADMIN ── -->
+<div id="pin-modal">
+  <div id="pin-modal-box">
+    <h3>🔐 <span data-i18n="pin_modal_title">Cambia PIN Amministratore</span></h3>
+    <p data-i18n="pin_modal_desc">Il nuovo PIN viene salvato nel browser. Includilo nel backup JSON per non perderlo.</p>
+    <div class="pin-field">
+      <label data-i18n="pin_attuale_label">PIN attuale</label>
+      <input type="password" id="pin-attuale" maxlength="30" autocomplete="current-password"/>
+    </div>
+    <div class="pin-field">
+      <label data-i18n="pin_nuovo_label">Nuovo PIN (min. 6 caratteri)</label>
+      <input type="password" id="pin-nuovo" maxlength="30" autocomplete="new-password"/>
+    </div>
+    <div class="pin-field">
+      <label data-i18n="pin_conferma_label">Conferma nuovo PIN</label>
+      <input type="password" id="pin-conferma" maxlength="30" autocomplete="new-password"
+             onkeydown="if(event.key==='Enter') salvaNuovoPIN()"/>
+    </div>
+    <div id="pin-modal-error"></div>
+    <div id="pin-modal-ok"></div>
+    <div class="pin-modal-btns">
+      <button class="btn-pin-cancel" onclick="chiudiCambioPIN()" data-i18n="pin_btn_annulla">Annulla</button>
+      <button class="btn-pin-save" onclick="salvaNuovoPIN()" data-i18n="pin_btn_salva">🔐 Aggiorna PIN</button>
+    </div>
+  </div>
+</div>
+
 <!-- Barra picker tappa da mappa -->
 <div id="tappa-picker-bar" onclick="wzCancelPicker()"></div>
 </body>
