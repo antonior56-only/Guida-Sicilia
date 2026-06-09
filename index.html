@@ -1781,6 +1781,86 @@ body.compact-itin .itin-tappa-card{ padding:6px 10px !important }
   line-height:1.4;display:none;
 }
 
+
+/* ── NAVIGAZIONE ITINERARIO ── */
+.itin-tappa-card{
+  cursor:pointer;
+  transition:border-color .15s, box-shadow .15s;
+}
+.itin-tappa-card:hover{
+  border-color:var(--sage) !important;
+  box-shadow:0 2px 8px rgba(26,122,158,.15);
+}
+.itin-tappa-card.selected-tappa{
+  border-left:3px solid var(--gold) !important;
+  background:rgba(232,160,32,.07) !important;
+  box-shadow:0 2px 10px rgba(232,160,32,.2);
+}
+.itin-day-tab{
+  display:inline-flex;align-items:center;padding:5px 12px;
+  border-radius:20px;border:1.5px solid var(--border);
+  background:#fff;font-size:11px;font-weight:700;cursor:pointer;
+  color:var(--muted);transition:all .15s;margin:2px;
+}
+.itin-day-tab.active-day{
+  background:var(--forest);color:#fff;border-color:var(--forest);
+}
+.itin-day-tabs{
+  display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 10px;
+}
+
+
+/* ── A1: GUIDA AI ── */
+.ai-guide-bar{
+  display:flex;gap:6px;margin-top:12px;padding-top:10px;
+  border-top:1px solid var(--border);
+}
+.btn-ai-guide{
+  flex:1;padding:8px 6px;border-radius:8px;font-size:11px;
+  font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;
+  border:1.5px solid var(--sage);background:transparent;
+  color:var(--sage);transition:all .15s;text-align:center;
+}
+.btn-ai-guide:hover,.btn-ai-guide.active{background:var(--sage);color:#fff}
+.btn-ai-guide:disabled{opacity:.5;cursor:default}
+#info-ai-text{
+  font-size:12px;line-height:1.6;color:var(--text);
+  background:var(--cream);border-radius:8px;
+  padding:10px 12px;margin-top:8px;
+  border-left:3px solid var(--sage);display:none;
+}
+.btn-ai-stop{
+  font-size:10px;padding:3px 8px;border-radius:5px;
+  border:1px solid var(--rust);background:transparent;
+  color:var(--rust);cursor:pointer;font-family:'DM Sans',sans-serif;
+  margin-left:auto;display:none;
+}
+
+/* ── A3: NOTA VOCALE ── */
+.btn-voice-note{
+  font-size:10px;padding:3px 8px;border-radius:5px;cursor:pointer;
+  font-family:'DM Sans',sans-serif;font-weight:600;
+  border:1px solid var(--muted);background:transparent;color:var(--muted);
+}
+.btn-voice-note.recording{
+  border-color:var(--rust);color:var(--rust);
+  animation:pulse-rec .8s ease-in-out infinite;
+}
+@keyframes pulse-rec{0%,100%{opacity:1}50%{opacity:.4}}
+.voice-note-player{
+  margin:4px 0 0 30px;display:flex;align-items:center;gap:6px;
+}
+.voice-note-player audio{
+  height:28px;flex:1;min-width:0;
+}
+
+/* ── C: ICS e max tappe ── */
+.itin-day-warn{
+  font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;
+  background:rgba(199,92,26,.12);color:var(--rust);
+  border:1px solid rgba(199,92,26,.3);margin-left:6px;
+}
+
 /* ── ADMIN-ONLY ELEMENTS ── */
 .admin-only{ display:none !important }
 body.is-admin .admin-only{ display:inline-flex !important }
@@ -2173,17 +2253,18 @@ box-shadow:0 4px 14px rgba(0,0,0,.15)">
           <div class="itin-actions-bar">
             <button class="btn-itin-action btn-wa" onclick="itinCondividiWA()" data-i18n="btn_wa_share">📲 WhatsApp</button>
             <button class="btn-itin-action btn-pdf" onclick="itinStampa()" data-i18n="btn_stampa">🖨 PDF</button>
+            <button class="btn-itin-action" style="background:var(--sage);color:#fff" onclick="itinEsportaICS()" data-i18n="btn_esporta_ics">📅 Calendario</button>
             <button class="btn-itin-action btn-compact" onclick="itinToggleCompact()" id="btn-compact-toggle" data-i18n="btn_compact">📄 Compatta</button>
           </div>
           <!-- Barra filtri -->
           <div id="itin-filter-bar">
-            <select id="itin-filter-day" onchange="itinApplicaFiltro()">
-              <option value="" data-i18n="itin_filter_tutti_giorni">Tutti i giorni</option>
-            </select>
-            <input id="itin-search-tappa" type="text"
-              placeholder="🔍 Cerca tappa..."
-              oninput="itinApplicaFiltro()"/>
-            <button class="btn-filter-reset" onclick="itinResetFiltro()">✕</button>
+            <div id="itin-day-tabs" class="itin-day-tabs"></div>
+            <div style="display:flex;gap:6px;margin-top:4px">
+              <input id="itin-search-tappa" type="text"
+                placeholder="🔍 Cerca tappa..."
+                oninput="itinApplicaFiltro()" style="flex:1"/>
+              <button class="btn-filter-reset" onclick="itinResetFiltro()">✕</button>
+            </div>
           </div>
           <div id="itin-days-list"></div>
           <button class="btn btn-outline" style="width:100%;font-size:12px;margin-top:10px" onclick="itinStampa()" data-i18n="btn_stampa">🖨 Stampa</button>
@@ -2219,6 +2300,16 @@ box-shadow:0 4px 14px rgba(0,0,0,.15)">
   <div id="info-meteo" style="margin-top:6px;font-size:12px;color:var(--muted);min-height:18px"></div>
   
   <div id="info-altimetria" style="margin-top:8px;font-size:12px;color:var(--forest);background:#eef5f0;padding:8px;border-radius:8px;display:none;border-left:3px solid var(--sage)"></div>
+
+  <!-- Guida AI interattiva -->
+  <div id="info-ai-guide-container" style="margin-top:4px">
+    <div class="ai-guide-bar">
+      <button class="btn-ai-guide" id="btn-ai-testo" onclick="generaGuidaAI('testo')" data-i18n="btn_guida_testo">📝 Leggi</button>
+      <button class="btn-ai-guide" id="btn-ai-audio" onclick="generaGuidaAI('audio')" data-i18n="btn_guida_audio">🎧 Ascolta</button>
+      <button class="btn-ai-stop" id="btn-ai-stop" onclick="fermaAudio()">⏹ Stop</button>
+    </div>
+    <div id="info-ai-text" data-nome=""></div>
+  </div>
 
   <div id="info-add-route" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
     <button class="btn" id="btn-add-current-route" style="background:var(--forest)" data-i18n="info_add_route">+ Aggiungi al percorso</button>
@@ -2895,6 +2986,20 @@ const TRANSLATIONS = {
     cerca_ai_loading: '🤖 Ricerca intelligente in corso...',
     cerca_ai_risultati: 'risultati trovati',
     cerca_ai_errore: 'Errore nella ricerca AI. Riprova.',
+    itin_no_coords: 'Coordinate non disponibili per questo itinerario.',
+    btn_guida_testo: '📝 Leggi',
+    btn_guida_audio: '🎧 Ascolta',
+    guida_ai_loading: 'Generazione guida in corso...',
+    audio_non_supportato: 'Audio non supportato su questo browser.',
+    audio_permesso_negato: 'Permesso microfono negato.',
+    nota_vocale_rec: 'Registrazione in corso... Tocca di nuovo per fermare.',
+    nota_vocale_salvata: 'Nota vocale salvata.',
+    nota_vocale_elimina: 'Elimina',
+    btn_esporta_ics: '📅 Calendario',
+    ics_esportato: 'File .ics esportato! Aprilo con il tuo calendario.',
+    itin_max_tappe_warn: 'tappe (molte!)',
+    itin_vuoto: 'Itinerario vuoto.',
+    info_nessun_luogo: 'Apri prima un luogo.',
   },
   en: {
     // Login
@@ -3225,6 +3330,20 @@ const TRANSLATIONS = {
     cerca_ai_loading: '🤖 Intelligent search in progress...',
     cerca_ai_risultati: 'results found',
     cerca_ai_errore: 'AI search error. Please retry.',
+    itin_no_coords: 'Coordinates not available for this itinerary.',
+    btn_guida_testo: '📝 Read',
+    btn_guida_audio: '🎧 Listen',
+    guida_ai_loading: 'Generating guide...',
+    audio_non_supportato: 'Audio not supported on this browser.',
+    audio_permesso_negato: 'Microphone permission denied.',
+    nota_vocale_rec: 'Recording... Tap again to stop.',
+    nota_vocale_salvata: 'Voice note saved.',
+    nota_vocale_elimina: 'Delete',
+    btn_esporta_ics: '📅 Calendar',
+    ics_esportato: 'File .ics exported! Open with your calendar app.',
+    itin_max_tappe_warn: 'stops (many!)',
+    itin_vuoto: 'Itinerary is empty.',
+    info_nessun_luogo: 'Open a place first.',
   }
 };
 
@@ -3447,6 +3566,7 @@ function caricaDatiLocali() {
       return { ...it, tappe: it.tappe.map((nome, i) => ({
         nome, giorno: 1, orario: '', nota: '', esterno: false,
         coords: (it.coords && it.coords[i]) ? it.coords[i] : null,
+        voiceNote: undefined,
         costo: '', paid: false, link: '', foto: ''
       }))};
     }
@@ -3590,6 +3710,11 @@ function handleCardClick(name, type, coords) {
 }
 
 function updateMap() {
+  // Debounce built-in: evita ridisegni multipli rapidi
+  clearTimeout(_updateMapTimer);
+  _updateMapTimer = setTimeout(function() { _doUpdateMap(); }, 80);
+}
+function _doUpdateMap() {
   clearMapMarkers();
   
   if(!markerClusterGroup && map) {
@@ -3680,15 +3805,7 @@ function updateMap() {
 
 // ── Debounce updateMap ──
 let _updateMapTimer = null;
-let _updateMapFn = null;
 
-// Wrapper debounce per updateMap (deve stare DOPO la definizione)
-_updateMapFn = updateMap;
-const _updateMapReal = updateMap;
-updateMap = function() {
-  clearTimeout(_updateMapTimer);
-  _updateMapTimer = setTimeout(_updateMapReal, 80);
-};
 
 function getFasciaAlloggio(p) {
   if (p < 60) return '€';
@@ -3818,6 +3935,10 @@ function showInfoByName(name, type) {
     btnAddItin.dataset.type = type;
     btnAddItin.dataset.coords = JSON.stringify(p.coords || null);
   }
+  // Resetta guida AI e setta il nome del luogo
+  resetGuidaAI();
+  const _aiDiv2 = document.getElementById('info-ai-text');
+  if (_aiDiv2) _aiDiv2.dataset.nome = p.name || '';
   document.getElementById('info-panel').classList.add('open');
   if(window.innerWidth<768){
     document.getElementById('chat-widget').style.display='none';
@@ -4503,7 +4624,13 @@ function itinGetAttivo() {
   if (!ITIN_ATTIVO && ITINERARI_CUSTOM.length > 0) ITIN_ATTIVO = ITINERARI_CUSTOM[0].name;
   return ITINERARI_CUSTOM.find(it => it.name === ITIN_ATTIVO) || null;
 }
-function itinCambiaAttivo(name) { ITIN_ATTIVO = name; itinRenderViewer(); }
+function itinCambiaAttivo(name) {
+  ITIN_ATTIVO = name;
+  _itinTappaSelezionata = null;
+  if (_itinMarkerSelezionato) { try{map.removeLayer(_itinMarkerSelezionato);}catch(e){} _itinMarkerSelezionato = null; }
+  _itinFiltroGiorno = '';
+  itinRenderViewer();
+}
 function itinApriGestione() {
   const it = itinGetAttivo(); if (!it) return;
   const az = prompt(t('itin_gestione_title') + ": \"" + it.name + "\"\n\n1=" + t('itin_rinomina') + "  2=" + t('itin_duplica') + "  3=" + t('itin_elimina_itin'));
@@ -4546,6 +4673,7 @@ function itinRenderViewer() {
   }
   // Aggiorna selector giorni nel filtro
   itinAggiornaSelectorGiorni(it);
+  itinAggiornaDayTabs(it);
   itinRenderGiorni(it);
   // Disegna percorso su mappa rispettando filtri attivi
   setTimeout(function() {
@@ -4589,11 +4717,14 @@ function itinRenderGiorni(it) {
     const hdr = document.createElement('div');
     hdr.className = 'itin-day-header';
     const hs = document.createElement('span');
+    const warnMax = tg.length > MAX_TAPPE_GIORNO
+      ? '<span class="itin-day-warn">⚠️ ' + tg.length + '/' + MAX_TAPPE_GIORNO + ' ' + t('itin_max_tappe_warn') + '</span>'
+      : '';
     hs.innerHTML = t('itin_giorno') + ' ' + g
       + ' <span style="font-weight:400;opacity:.7;font-size:10px">· '
       + tg.length + ' ' + t('itin_tappe_giorno')
       + (budgetG > 0 ? ' · <span style="color:var(--gold);font-weight:600">💰 ' + budgetG.toFixed(0) + '€</span>' : '')
-      + '</span>';
+      + '</span>' + warnMax;
     const hb = document.createElement('button');
     hb.className = 'btn-day-maps';
     hb.textContent = t('itin_apri_maps');
@@ -4671,7 +4802,15 @@ function itinRenderGiorni(it) {
     tg.forEach((tp, vi) => {
       const card = document.createElement('div');
       card.className = 'itin-tappa-card' + (tp._conflict ? ' conflict' : '');
+      card.dataset.tappaIdx = tp._idx;
       if (tp.paid) card.style.opacity = '0.8';
+      // Click sulla card → evidenzia tappa sulla mappa
+      card.addEventListener('click', (function(_idx){ return function(e){
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA'
+            || e.target.tagName === 'SELECT' || e.target.tagName === 'BUTTON'
+            || e.target.tagName === 'LABEL' || e.target.tagName === 'A') return;
+        itinSelezionaTappa(_idx);
+      }; })(tp._idx));
 
       // Badge
       const badgeExt = tp.esterno
@@ -4747,6 +4886,34 @@ function itinRenderGiorni(it) {
       card.querySelectorAll('[data-name]').forEach(el => { el.dataset.name = nm; });
 
       card.dataset.dayGroup = g;
+      // Aggiungi nota vocale se presente
+      if (tp.voiceNote) {
+        const vp = document.createElement('div');
+        vp.className = 'voice-note-player';
+        vp.dataset.name = ''; vp.dataset.idx = tp._idx;
+        const aud = document.createElement('audio');
+        aud.controls = true; aud.src = tp.voiceNote;
+        const vdel = document.createElement('button');
+        vdel.className = 'btn-tap-sm btn-tap-del';
+        vdel.textContent = '🗑 ' + t('nota_vocale_elimina');
+        vdel.dataset.name = ''; vdel.dataset.idx = tp._idx;
+        vdel.onclick = function(){ itinEliminaVoiceNoteByEl(this); };
+        vp.appendChild(aud); vp.appendChild(vdel);
+        card.querySelector('.itin-tappa-actions')?.before(vp);
+      }
+      // Aggiungi btn nota vocale nelle azioni
+      const actBar = card.querySelector('.itin-tappa-actions');
+      if (actBar) {
+        const vbtn = document.createElement('button');
+        vbtn.className = 'btn-tap-sm btn-voice-note';
+        vbtn.dataset.name = ''; vbtn.dataset.idx = tp._idx;
+        vbtn.textContent = '🎤';
+        vbtn.title = t('nota_vocale_rec');
+        vbtn.onclick = function(){ itinToggleVoiceNoteByEl(this); };
+        actBar.appendChild(vbtn);
+      }
+      // Imposta data-name su tutti gli elementi
+      card.querySelectorAll('[data-name]').forEach(el => { el.dataset.name = nm; });
       container.appendChild(card);
     });
   });
@@ -4770,6 +4937,8 @@ function itinEliminaTappaByEl(el)  { itinEliminaTappa(el.dataset.name, parseInt(
 function itinVaiATappaByEl(el)     { itinVaiATappa(JSON.parse(el.dataset.coords)); }
 function itinRimuoviFotoByEl(el)   { itinRimuoviFoto(el.dataset.name, parseInt(el.dataset.idx)); }
 function itinCaricaFotoByEl(el, ev){ itinCaricaFoto(ev, el.dataset.name, parseInt(el.dataset.idx)); }
+function itinToggleVoiceNoteByEl(el){ itinToggleVoiceNote(el.dataset.name, parseInt(el.dataset.idx)); }
+function itinEliminaVoiceNoteByEl(el){ itinEliminaVoiceNote(el.dataset.name, parseInt(el.dataset.idx)); }
 function itinDettagliAIByEl(el)    { itinDettagliAI(el.dataset.nome, ''); }
 function itinAlternativaAIByEl(el) { itinAlternativaAI(el.dataset.name, parseInt(el.dataset.idx)); }
 
@@ -5067,7 +5236,8 @@ function itinAggiornaSelectorGiorni(it) {
 }
 
 function itinApplicaFiltro() {
-  const sel = document.getElementById('itin-filter-day');
+  itinApplicaFiltroDOM(); return;
+  const sel = document.getElementById('itin-filter-day'); // legacy
   const srch = document.getElementById('itin-search-tappa');
   _itinFiltroGiorno = sel ? sel.value : '';
   _itinFiltroCerca  = srch ? srch.value.trim().toLowerCase() : '';
@@ -5164,6 +5334,322 @@ function itinDisegnaMappaTappe(tappe) {
     })(i,coords[i],coords[i+1],ph);
   }
 }
+
+
+// ═══════════════════════════════════════════════════════
+// NAVIGAZIONE ITINERARIO: click tappa → mappa
+// ═══════════════════════════════════════════════════════
+let _itinTappaSelezionata = null; // idx della tappa attualmente selezionata
+let _itinMarkerSelezionato = null; // marker Leaflet evidenziato
+
+function itinSelezionaTappa(idx) {
+  const it = itinGetAttivo(); if (!it) return;
+  const tp = it.tappe[idx]; if (!tp || !tp.coords) {
+    showToast('📍 ' + t('itin_no_coords')); return;
+  }
+  _itinTappaSelezionata = idx;
+
+  // Aggiorna stile card: rimuovi selezione precedente, aggiungi alla corrente
+  document.querySelectorAll('.itin-tappa-card').forEach(c => c.classList.remove('selected-tappa'));
+  const selCard = document.querySelector('.itin-tappa-card[data-tappa-idx="' + idx + '"]');
+  if (selCard) {
+    selCard.classList.add('selected-tappa');
+    selCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  // Rimuovi marker selezionato precedente
+  if (_itinMarkerSelezionato && typeof map !== 'undefined') {
+    try { map.removeLayer(_itinMarkerSelezionato); } catch(e) {}
+    _itinMarkerSelezionato = null;
+  }
+
+  // Crea marker evidenziato (stella dorata più grande)
+  if (typeof map !== 'undefined' && window.L) {
+    const ic = L.divIcon({
+      className: '',
+      html: '<div style="background:var(--gold);color:#fff;border-radius:50%;width:32px;height:32px;'
+          + 'display:flex;align-items:center;justify-content:center;font-size:16px;'
+          + 'box-shadow:0 0 0 4px rgba(232,160,32,.35),0 3px 10px rgba(0,0,0,.3);">★</div>',
+      iconSize: [32,32], iconAnchor: [16,16]
+    });
+    _itinMarkerSelezionato = L.marker(tp.coords, { icon: ic, zIndexOffset: 1000 }).addTo(map);
+    _itinMarkerSelezionato.bindPopup(
+      '<b>' + tp.nome + '</b>' +
+      (tp.orario ? '<br>⏰ ' + tp.orario : '') +
+      (tp.nota   ? '<br><i>' + tp.nota + '</i>' : '')
+    ).openPopup();
+    map.flyTo(tp.coords, 15, { duration: 0.8 });
+  }
+}
+
+// Aggiorna le tab giorni nella barra filtri
+function itinAggiornaDayTabs(it) {
+  const container = document.getElementById('itin-day-tabs');
+  if (!container || !it) return;
+
+  const giorni = [...new Set(it.tappe.map(tp => tp.giorno||1))].sort((a,b)=>a-b);
+  container.innerHTML = '';
+
+  // Tab "Tutti"
+  const allTab = document.createElement('span');
+  allTab.className = 'itin-day-tab' + (_itinFiltroGiorno === '' ? ' active-day' : '');
+  allTab.textContent = t('itin_filter_tutti_giorni');
+  allTab.onclick = () => { _itinFiltroGiorno = ''; itinAggiornaDayTabs(it); itinApplicaFiltroDOM(); };
+  container.appendChild(allTab);
+
+  // Tab per ogni giorno
+  giorni.forEach(g => {
+    const tab = document.createElement('span');
+    tab.className = 'itin-day-tab' + (_itinFiltroGiorno == g ? ' active-day' : '');
+    const nTappe = it.tappe.filter(tp=>(tp.giorno||1)===g).length;
+    tab.textContent = t('itin_giorno') + ' ' + g + ' (' + nTappe + ')';
+    tab.onclick = (function(_g){ return function() {
+      _itinFiltroGiorno = String(_g);
+      itinAggiornaDayTabs(it);
+      itinApplicaFiltroDOM();
+    }; })(g);
+    container.appendChild(tab);
+  });
+}
+
+// Applica filtro solo al DOM (senza ridisegnare tutto)
+function itinApplicaFiltroDOM() {
+  const srch = document.getElementById('itin-search-tappa');
+  _itinFiltroCerca = srch ? srch.value.trim().toLowerCase() : '';
+
+  const it = itinGetAttivo(); if (!it) return;
+
+  // Filtra tappe visibili
+  const tappeVis = it.tappe.filter(tp => {
+    if (_itinFiltroGiorno && (tp.giorno||1) != parseInt(_itinFiltroGiorno)) return false;
+    if (_itinFiltroCerca && !tp.nome.toLowerCase().includes(_itinFiltroCerca)) return false;
+    return true;
+  });
+
+  // Mostra/nascondi header giorni
+  document.querySelectorAll('.itin-day-header').forEach(hdr => {
+    const g = hdr.dataset.day;
+    hdr.style.display = (!_itinFiltroGiorno || g == _itinFiltroGiorno) ? '' : 'none';
+  });
+
+  // Mostra/nascondi card tappe con ricerca
+  document.querySelectorAll('.itin-tappa-card').forEach(card => {
+    const nome = (card.querySelector('.itin-tappa-name')?.textContent || '').toLowerCase();
+    const g = card.dataset.dayGroup;
+    const dayOk = !_itinFiltroGiorno || !g || g == _itinFiltroGiorno;
+    const srchOk = !_itinFiltroCerca || nome.includes(_itinFiltroCerca);
+    card.style.display = (dayOk && srchOk) ? '' : 'none';
+    card.classList.toggle('highlight-search', !!(srchOk && _itinFiltroCerca));
+  });
+
+  // Aggiorna mappa con le tappe visibili
+  itinDisegnaMappaTappe(tappeVis);
+
+  // Reset marker selezionato se ora nascosto
+  if (_itinMarkerSelezionato && _itinTappaSelezionata !== null) {
+    const tp = it.tappe[_itinTappaSelezionata];
+    if (tp && !tappeVis.includes(tp)) {
+      try { map.removeLayer(_itinMarkerSelezionato); } catch(e) {}
+      _itinMarkerSelezionato = null;
+    }
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════
+// A1 — GUIDA AI: testo + audio per il pannello info
+// ═══════════════════════════════════════════════════════
+let _guidaAICache = {}; // cache per evitare chiamate duplicate
+
+async function generaGuidaAI(mode) {
+  const textDiv    = document.getElementById('info-ai-text');
+  const btnTesto   = document.getElementById('btn-ai-testo');
+  const btnAudio   = document.getElementById('btn-ai-audio');
+  const btnStop    = document.getElementById('btn-ai-stop');
+  if (!textDiv || !btnTesto || !btnAudio) return;
+
+  const nome = textDiv.dataset.nome || document.getElementById('info-name')?.textContent || '';
+  if (!nome) { showToast(t('info_nessun_luogo')); return; }
+
+  // Toggle audio/testo
+  btnTesto.classList.toggle('active', mode === 'testo');
+  btnAudio.classList.toggle('active', mode === 'audio');
+  if (mode === 'testo' && window.speechSynthesis) window.speechSynthesis.cancel();
+
+  // Se già generata e non in errore → riusa la cache
+  if (_guidaAICache[nome]) {
+    textDiv.style.display = 'block';
+    textDiv.innerHTML = _guidaAICache[nome];
+    if (mode === 'audio') {
+      leggiAdAltaVoce(textDiv.innerText);
+      if (btnStop) btnStop.style.display = 'inline-block';
+    }
+    return;
+  }
+
+  // Genera
+  btnTesto.disabled = true; btnAudio.disabled = true;
+  textDiv.style.display = 'block';
+  textDiv.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-top-color:var(--sage)"></span> ' + t('guida_ai_loading');
+
+  try {
+    const lang = currentLang === 'en' ? 'English' : 'italiano';
+    const prompt = 'Sei una guida turistica esperta della Sicilia. Scrivi un racconto evocativo e appassionante sul luogo "' + nome + '". Includi storia, curiosità, atmosfera e consigli pratici. Testo pulito, nessuna formattazione. Max 120 parole. Lingua: ' + lang + '.';
+    const payload = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 250 } };
+    const raw = await fetchGeminiWithRetry(payload, false, false, 0, false);
+    const testo = typeof raw === 'string' ? raw : JSON.stringify(raw);
+    _guidaAICache[nome] = testo;
+    textDiv.innerHTML = testo;
+    if (mode === 'audio') {
+      leggiAdAltaVoce(testo);
+      if (btnStop) btnStop.style.display = 'inline-block';
+    }
+  } catch(e) {
+    textDiv.innerHTML = '<span style="color:var(--rust)">' + t('err_ai') + '</span>';
+  } finally {
+    btnTesto.disabled = false; btnAudio.disabled = false;
+  }
+}
+
+function fermaAudio() {
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  const btnStop = document.getElementById('btn-ai-stop');
+  if (btnStop) btnStop.style.display = 'none';
+  const btnAudio = document.getElementById('btn-ai-audio');
+  if (btnAudio) btnAudio.classList.remove('active');
+}
+
+function leggiAdAltaVoce(testo) {
+  if (!window.speechSynthesis) { showToast(t('audio_non_supportato')); return; }
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(testo);
+  u.lang = currentLang === 'en' ? 'en-US' : 'it-IT';
+  u.rate = 0.92;
+  u.onend = function() {
+    const btnStop = document.getElementById('btn-ai-stop');
+    if (btnStop) btnStop.style.display = 'none';
+    const btnAudio = document.getElementById('btn-ai-audio');
+    if (btnAudio) btnAudio.classList.remove('active');
+  };
+  window.speechSynthesis.speak(u);
+}
+
+// Resetta guida AI quando si cambia luogo nel pannello info
+function resetGuidaAI() {
+  const textDiv  = document.getElementById('info-ai-text');
+  const btnTesto = document.getElementById('btn-ai-testo');
+  const btnAudio = document.getElementById('btn-ai-audio');
+  const btnStop  = document.getElementById('btn-ai-stop');
+  if (textDiv)  { textDiv.style.display='none'; textDiv.innerHTML=''; }
+  if (btnTesto) { btnTesto.classList.remove('active'); }
+  if (btnAudio) { btnAudio.classList.remove('active'); }
+  if (btnStop)  { btnStop.style.display='none'; }
+  fermaAudio();
+}
+
+// ═══════════════════════════════════════════════════════
+// A3 — NOTA VOCALE per tappa itinerario
+// ═══════════════════════════════════════════════════════
+let _mediaRecorder = null;
+let _audioChunks   = [];
+let _recTappaKey   = null; // 'itinName_idx'
+
+function itinToggleVoiceNote(name, idx) {
+  if (_mediaRecorder && _mediaRecorder.state === 'recording') {
+    _mediaRecorder.stop();
+    return;
+  }
+  if (!navigator.mediaDevices || !window.MediaRecorder) {
+    showToast(t('audio_non_supportato'));
+    return;
+  }
+  _recTappaKey = name + '_' + idx;
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    _audioChunks = [];
+    _mediaRecorder = new MediaRecorder(stream);
+    _mediaRecorder.ondataavailable = e => { if (e.data.size > 0) _audioChunks.push(e.data); };
+    _mediaRecorder.onstop = function() {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(_audioChunks, { type: 'audio/webm' });
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        const it = ITINERARI_CUSTOM.find(x => x.name === name);
+        if (it && it.tappe[idx]) {
+          it.tappe[idx].voiceNote = ev.target.result;
+          itinSalva(); itinRenderViewer();
+          showToast('🎤 ' + t('nota_vocale_salvata'));
+        }
+      };
+      reader.readAsDataURL(blob);
+      _mediaRecorder = null;
+    };
+    _mediaRecorder.start();
+    showToast('🔴 ' + t('nota_vocale_rec'));
+    // Aggiorna pulsante
+    const btn = document.querySelector('.btn-voice-note[data-idx="' + idx + '"]');
+    if (btn) btn.classList.add('recording');
+  }).catch(() => showToast(t('audio_permesso_negato')));
+}
+
+function itinEliminaVoiceNote(name, idx) {
+  const it = ITINERARI_CUSTOM.find(x => x.name === name);
+  if (!it || !it.tappe[idx]) return;
+  delete it.tappe[idx].voiceNote;
+  itinSalva(); itinRenderViewer();
+}
+
+// ═══════════════════════════════════════════════════════
+// C — ESPORTA .ICS (calendario)
+// ═══════════════════════════════════════════════════════
+function itinEsportaICS() {
+  const it = itinGetAttivo();
+  if (!it || !it.tappe.length) { showToast(t('itin_vuoto')); return; }
+  const oggi = new Date();
+  const pad = function(n){ return String(n).padStart(2,'0'); };
+  const CRLF = '\r\n';
+  const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Sicilia Turismo//IT','CALSCALE:GREGORIAN'];
+  it.tappe.forEach(function(tp, i) {
+    const g = tp.giorno || 1;
+    const d = new Date(oggi);
+    d.setDate(d.getDate() + g - 1);
+    let dtstart, dtend;
+    if (tp.orario) {
+      const parts = tp.orario.split(':').map(Number);
+      const ds = new Date(d); ds.setHours(parts[0], parts[1]||0, 0);
+      const de = new Date(ds); de.setHours(de.getHours()+1);
+      const fmt = function(x){ return x.getFullYear()+pad(x.getMonth()+1)+pad(x.getDate())+'T'+pad(x.getHours())+pad(x.getMinutes())+'00'; };
+      dtstart = 'DTSTART:' + fmt(ds);
+      dtend   = 'DTEND:'   + fmt(de);
+    } else {
+      const base = d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate());
+      dtstart = 'DTSTART;VALUE=DATE:' + base;
+      dtend   = 'DTEND;VALUE=DATE:'   + base;
+    }
+    lines.push('BEGIN:VEVENT');
+    lines.push('UID:sic-' + i + '-' + Date.now() + '@siciliaturismo');
+    lines.push(dtstart);
+    lines.push(dtend);
+    lines.push('SUMMARY:' + (tp.nome||'').replace(/,/g,'\\,'));
+    if (tp.nota) lines.push('DESCRIPTION:' + (tp.nota||'').replace(/\n/g,'\\n').replace(/,/g,'\\,'));
+    if (tp.coords && tp.coords.length===2) lines.push('GEO:' + tp.coords[0] + ';' + tp.coords[1]);
+    if (tp.link) lines.push('URL:' + tp.link);
+    lines.push('END:VEVENT');
+  });
+  lines.push('END:VCALENDAR');
+  const ics = lines.join(CRLF);
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = (it.name||'itinerario').replace(/\s+/g,'_') + '.ics';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  showToast('\uD83D\uDCC5 ' + t('ics_esportato'));
+}
+
+// ═══════════════════════════════════════════════════════
+// C — MAX TAPPE PER GIORNO (avviso nella header giornata)
+// ═══════════════════════════════════════════════════════
+const MAX_TAPPE_GIORNO = 5;
 
 function itinAggiornaOrario(name, idx, val) { const it = ITINERARI_CUSTOM.find(x=>x.name===name); if(it){it.tappe[idx].orario=val;itinSalva();} }
 function itinAggiornaNota(name, idx, val) { const it = ITINERARI_CUSTOM.find(x=>x.name===name); if(it){it.tappe[idx].nota=val;itinSalva();} }
@@ -5288,10 +5774,12 @@ function loadItinRouteByName(name, isCustom) {
   }
 
   if (currentRouteCoords.length > 0) {
-    drawRoute();
+    if (typeof map !== 'undefined' && map) {
+      drawRoute();
+    }
     showToast('"' + it.name + '" ' + t('toast_itin_caricato'));
   } else {
-    showToast('⚠️ Coordinate non disponibili per questo itinerario.');
+    showToast('⚠️ ' + t('itin_no_coords'));
   }
 }
 function stampaItinerarioByName(name, isCustom) {
@@ -5695,15 +6183,24 @@ async function fetchGeminiWithRetry(payload, isJson = false, isVision = false, r
   const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
 
   if (!response.ok) {
+    // 503 / 429 / 500: Gemini sovraccarico — retry automatico con backoff
+    if ((response.status === 503 || response.status === 429 || response.status === 500)
+        && retryCount < MAX_RETRIES) {
+      const wait = (retryCount + 1) * 2000; // 2s poi 4s
+      showToast('⏳ Gemini occupato, riprovo tra ' + (wait/1000) + 's… (' + (retryCount+1) + '/' + MAX_RETRIES + ')');
+      await new Promise(res => setTimeout(res, wait));
+      return fetchGeminiWithRetry(payload, isJson, isVision, retryCount + 1, jsonSchema);
+    }
+    // 400 / 403: problema di chiave API
     if ((response.status === 400 || response.status === 403) && retryCount < MAX_RETRIES) {
       const newKey = await askForApiKeyModal();
       if (newKey) {
         localStorage.setItem('sicilia_gemini_key', newKey);
         return fetchGeminiWithRetry(payload, isJson, isVision, retryCount + 1, jsonSchema);
       }
-      throw new Error("API Key annullata");
+      throw new Error('API Key annullata');
     }
-    throw new Error(`HTTP error! status: ${response.status}`);
+    throw new Error('HTTP ' + response.status + (response.status === 503 ? ' — Gemini sovraccarico' : ''));
   }
 
   const data = await response.json();
@@ -6065,7 +6562,11 @@ Rispondi SOLO con questo JSON (nessun testo fuori dal JSON):
     }
 
     wzTappeCorrente = tappeGrezze;
-    wzMostraRisultato(raw.name, raw.desc, vals);
+    try {
+      wzMostraRisultato(raw.name, raw.desc, vals);
+    } catch(innerErr) {
+      showToast(t('wz_genera_err') + ': ' + (innerErr.message||'').slice(0,60));
+    }
   } catch(e) {
     console.error('[WizardAI] Errore:', e);
     showToast(t('wz_genera_err') + ' (' + (e.message||'').slice(0,40) + ')');
@@ -6284,7 +6785,7 @@ function salvaItinerarioWizard() {
   if (!nome) { showToast(t('wz_inserisci_nome')); return; }
   const nuovoItin = {
     name: nome, desc: wzItinGenerato?.desc || '',
-    tappe: wzTappeCorrente.map(tp => ({nome:tp.nome,giorno:tp.giorno||1,orario:tp.orario||'',nota:tp.nota||'',esterno:tp.esterno||false,coords:tp.coords||null,costo:'',paid:false,link:'',foto:''})),
+    tappe: wzTappeCorrente.map(tp => ({nome:tp.nome,giorno:tp.giorno||1,orario:tp.orario||'',nota:tp.nota||'',esterno:tp.esterno||false,coords:tp.coords||null,costo:'',paid:false,link:'',foto:'',voiceNote:undefined})),
     custom: true
   };
   ITINERARI_CUSTOM.unshift(nuovoItin); itinSalva(); ITIN_ATTIVO = nome;
