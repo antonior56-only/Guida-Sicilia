@@ -3678,13 +3678,17 @@ function updateMap() {
 }
 
 
-// ── Debounce updateMap per evitare ridisegni multipli rapidi ──
+// ── Debounce updateMap ──
 let _updateMapTimer = null;
-const _updateMapOriginal = updateMap; // preserva la funzione originale
-function updateMap() {
+let _updateMapFn = null;
+
+// Wrapper debounce per updateMap (deve stare DOPO la definizione)
+_updateMapFn = updateMap;
+const _updateMapReal = updateMap;
+updateMap = function() {
   clearTimeout(_updateMapTimer);
-  _updateMapTimer = setTimeout(_updateMapOriginal, 80);
-}
+  _updateMapTimer = setTimeout(_updateMapReal, 80);
+};
 
 function getFasciaAlloggio(p) {
   if (p < 60) return '€';
@@ -3994,16 +3998,17 @@ function switchTab(tab){
   document.querySelectorAll('.tab').forEach((t,i)=>{
     const tabs=['luoghi','trekking','eventi','ristoranti','alloggi','itinerari'];
     t.classList.toggle('active',tabs[i]===tab);
+  });
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-'+tab).classList.add('active');
+
   // Pulisci marker itinerari quando si lascia la tab itinerari
   if (tab !== 'itinerari') {
     if (window._wzLines) window._wzLines.forEach(function(l){ try{map.removeLayer(l);}catch(e){} });
     if (window._wzMarkers) window._wzMarkers.forEach(function(m){ try{map.removeLayer(m);}catch(e){} });
     window._wzLines = []; window._wzMarkers = [];
   }
-  });
-  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-  document.getElementById('panel-'+tab).classList.add('active');
-  
+
   if(tab==='luoghi') renderLuoghi();
   else if(tab==='trekking') renderTrek();
   else if(tab==='ristoranti') renderRest();
@@ -5268,11 +5273,26 @@ function renderItinerari() {
 function loadItinRouteByName(name, isCustom) {
   const list = isCustom ? ITINERARI_CUSTOM : ITINERARI_PREDEFINITI;
   const it = list.find(x => x.name === name);
-  if(!it) return;
-  currentRouteCoords = [...it.coords];
-  currentRouteNames = [...it.tappe];
-  drawRoute();
-  showToast(`"${it.name}" ${t('toast_itin_caricato')}`);
+  if (!it) return;
+
+  if (isCustom && it.tappe && it.tappe.length > 0 && typeof it.tappe[0] === 'object') {
+    // Itinerari custom v2: struttura con oggetti {nome, coords, giorno...}
+    currentRouteCoords = it.tappe
+      .filter(tp => tp.coords && tp.coords.length === 2 && !isNaN(tp.coords[0]))
+      .map(tp => tp.coords);
+    currentRouteNames = it.tappe.map(tp => tp.nome || tp.name || '');
+  } else {
+    // Itinerari predefiniti o custom v1: tappe = array di stringhe, coords separato
+    currentRouteCoords = it.coords ? [...it.coords] : [];
+    currentRouteNames  = it.tappe  ? [...it.tappe]  : [];
+  }
+
+  if (currentRouteCoords.length > 0) {
+    drawRoute();
+    showToast('"' + it.name + '" ' + t('toast_itin_caricato'));
+  } else {
+    showToast('⚠️ Coordinate non disponibili per questo itinerario.');
+  }
 }
 function stampaItinerarioByName(name, isCustom) {
   const list = isCustom ? ITINERARI_CUSTOM : ITINERARI_PREDEFINITI;
