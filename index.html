@@ -1903,6 +1903,27 @@ body.compact-itin .itin-tappa-card{ padding:6px 10px !important }
 .btn-gmaps-ai:hover{background:var(--forest)}
 .gmaps-feedback{font-size:11px;margin-top:6px;min-height:16px;color:var(--sage);font-weight:600;}
 .gmaps-feedback.err{color:var(--rust)}
+
+/* ── CONNETTORE DISTANZA TRA TAPPE ── */
+.itin-dist-connector{
+  display:flex;align-items:center;gap:6px;
+  margin:2px 0 2px 18px;padding:2px 0;
+  font-size:11px;color:var(--muted);font-weight:600;
+}
+.itin-dist-connector::before{
+  content:'';width:2px;height:16px;background:var(--border);
+  margin-left:8px;border-radius:2px;
+}
+.itin-dist-badge{
+  background:rgba(122,143,106,.12);color:var(--sage);
+  padding:1px 8px;border-radius:10px;font-size:10px;
+  border:1px solid rgba(122,143,106,.25);
+}
+.itin-day-total{
+  font-size:11px;color:var(--sage);font-weight:700;
+  margin:4px 0 8px 18px;
+}
+
 /* ── ADMIN-ONLY ELEMENTS ── */
 .admin-only{ display:none !important }
 body.is-admin .admin-only{ display:inline-flex !important }
@@ -3112,6 +3133,7 @@ const TRANSLATIONS = {
     gmaps_inserisci_qualcosa: 'Incolla un link, un nome o del testo.',
     gmaps_analisi: 'Analisi in corso...',
     gmaps_ok: 'Dati importati! Verifica e completa.',
+    itin_dist_giorno: 'Percorso del giorno',
   },
   en: {
     // Login
@@ -3476,6 +3498,7 @@ const TRANSLATIONS = {
     gmaps_inserisci_qualcosa: 'Paste a link, name or text.',
     gmaps_analisi: 'Analyzing...',
     gmaps_ok: 'Data imported! Check and complete.',
+    itin_dist_giorno: 'Day route',
   }
 };
 
@@ -5400,7 +5423,19 @@ function itinRenderGiorni(it) {
     }
 
     // ── Card per ogni tappa ──
+    let _distGiornoTot = 0;
     tg.forEach((tp, vi) => {
+      // Connettore distanza dalla tappa precedente (stesso giorno)
+      if (vi > 0 && tp.coords && tg[vi-1].coords) {
+        const dist = distanzaKm(tg[vi-1].coords, tp.coords);
+        if (isFinite(dist)) {
+          _distGiornoTot += dist;
+          const conn = document.createElement('div');
+          conn.className = 'itin-dist-connector';
+          conn.innerHTML = '<span class="itin-dist-badge">\u2193 ' + dist.toFixed(1) + ' km</span>';
+          container.appendChild(conn);
+        }
+      }
       const card = document.createElement('div');
       card.className = 'itin-tappa-card' + (tp._conflict ? ' conflict' : '');
       card.dataset.tappaIdx = tp._idx;
@@ -5517,6 +5552,13 @@ function itinRenderGiorni(it) {
       card.querySelectorAll('[data-name]').forEach(el => { el.dataset.name = nm; });
       container.appendChild(card);
     });
+    // Totale km percorso del giorno
+    if (_distGiornoTot > 0) {
+      const tot = document.createElement('div');
+      tot.className = 'itin-day-total';
+      tot.textContent = '\uD83D\uDCCD ' + t('itin_dist_giorno') + ': ' + _distGiornoTot.toFixed(1) + ' km';
+      container.appendChild(tot);
+    }
   });
 }
 
@@ -6284,17 +6326,38 @@ async function itinOrganizzaGiorniAI() {
   } catch(e){showToast(t("wz_genera_err"));}
   finally{btn.textContent=ot;btn.disabled=false;}
 }
-async function itinOttimizzaAI() {
-  const it = itinGetAttivo(); if(!it||!it.tappe.length) return;
-  const btn = document.querySelector(".btn-itin-ai.gold"); const ot=btn.textContent;
-  btn.textContent="⏳"; btn.disabled=true;
-  const ts=it.tappe.map((tp,i)=>i+": \""+tp.nome+"\" giorno "+tp.giorno).join(", ");
+function itinOttimizzaAI() {
+  const it = itinGetAttivo(); if(!it || !it.tappe.length) return;
+  const btn = document.querySelector(".btn-itin-ai.gold"); const ot = btn ? btn.textContent : '';
+  if(btn){ btn.textContent="\u23f3"; btn.disabled=true; }
   try {
-    const payload={contents:[{parts:[{text:"Riordina queste tappe siciliane ottimizzando le distanze dentro ogni giorno. Tappe: "+ts}]}],systemInstruction:{parts:[{text:"Rispondi SOLO con JSON: {\"ordine\":[0,3,1,2,...]} con gli indici originali riordinati"}]}};
-    const raw=await fetchGeminiWithRetry(payload,true,false,0,false);
-    if(raw.ordine&&Array.isArray(raw.ordine)){const nt=raw.ordine.map(i=>it.tappe[i]).filter(Boolean);if(nt.length===it.tappe.length){it.tappe=nt;itinSalva();itinRenderViewer();showToast(t("itin_ai_ottimizza_ok"));}}
-  } catch(e){showToast(t("wz_genera_err"));}
-  finally{btn.textContent=ot;btn.disabled=false;}
+    const giorni = {};
+    it.tappe.forEach(function(tp){ const g = tp.giorno||1; if(!giorni[g]) giorni[g]=[]; giorni[g].push(tp); });
+    let nuovo = [];
+    Object.keys(giorni).sort(function(a,b){return a-b;}).forEach(function(g){
+      const gr = giorni[g];
+      if(gr.length<=1){ nuovo = nuovo.concat(gr); return; }
+      const conC = gr.filter(function(t){ return t.coords && t.coords.length===2 && !isNaN(t.coords[0]); });
+      const senzaC = gr.filter(function(t){ return !(t.coords && t.coords.length===2 && !isNaN(t.coords[0])); });
+      if(conC.length>1){
+        const ord=[]; let rest=conC.slice(); let cur=rest.shift(); ord.push(cur);
+        while(rest.length>0){
+          let mD=Infinity, mI=0;
+          for(let i=0;i<rest.length;i++){ const d=distanzaKm(cur.coords,rest[i].coords); if(d<mD){mD=d;mI=i;} }
+          cur=rest.splice(mI,1)[0]; ord.push(cur);
+        }
+        nuovo = nuovo.concat(ord).concat(senzaC);
+      } else { nuovo = nuovo.concat(gr); }
+    });
+    if(nuovo.length===it.tappe.length){ it.tappe=nuovo; itinSalva(); itinRenderViewer(); showToast(t("itin_ai_ottimizza_ok")); }
+  } catch(e){ showToast(t("wz_genera_err")); }
+  finally{ if(btn){ btn.textContent=ot; btn.disabled=false; } }
+}
+function distanzaKm(c1,c2){
+  if(!c1||!c2) return Infinity;
+  const R=6371, dLat=(c2[0]-c1[0])*Math.PI/180, dLon=(c2[1]-c1[1])*Math.PI/180;
+  const a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(c1[0]*Math.PI/180)*Math.cos(c2[0]*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 function itinStampa() { const it=itinGetAttivo(); if(it) stampaItinerarioNew(it); }
 function stampaItinerarioNew(it) {
@@ -7033,13 +7096,13 @@ async function generaItinerarioWizard() {
 
   const systemPrompt = `Sei un travel planner esperto della Sicilia. ${langInstr}
 Crea un itinerario di ${vals.giorni} giorni per: ${chiMap[vals.chi]}, budget ${budgetMap[vals.budget]}, interessi: ${vals.interessi.join(', ') || 'generali'}.
-Zona richiesta: ${vals.zona || 'Sicilia intera'}.
+=== VINCOLO GEOGRAFICO OBBLIGATORIO ===\nZONA BASE: ${vals.zona || 'Sicilia intera'}.\nREGOLE: 1) TUTTE le tappe nella zona di ${vals.zona || 'Sicilia'} o entro 30-40 km. Se zona = una citta, resta in quella citta e dintorni. 2) NON tappe in zone lontane (zona Palermo => NIENTE Catania/Siracusa/Taormina). 3) Ogni giornata COMPATTA: tappe dello stesso giorno entro 20-25 km tra loro. 4) Ordina le tappe del giorno per vicinanza (nearest-neighbor).
 
 Hai a disposizione questi luoghi già presenti nell'app — usali con PREFERENZA quando sono pertinenti (copia il nome ESATTO):
 ${luoghiAppStr || 'nessuno per questa zona'}.
 
 Puoi aggiungere liberamente altri luoghi REALI della Sicilia non presenti nell'elenco sopra, per rendere l'itinerario più completo e interessante. Per queste tappe aggiuntive aggiungi "esterno": true.
-Distribuisci le tappe nei giorni in modo logico (max 4 tappe/giorno). Includi almeno 1 ristorante per giorno se possibile.
+Distribuisci le tappe nei giorni rispettando i VINCOLI GEOGRAFICI sopra (max 4 tappe/giorno, ogni giorno compatto e vicino). IMPORTANTE: ogni luogo deve comparire UNA SOLA VOLTA in tutto l'itinerario, NON ripetere mai lo stesso posto. Includi almeno 1 ristorante per giorno se possibile, vicino alle altre tappe dello stesso giorno.
 
 Rispondi SOLO con questo JSON (nessun testo fuori dal JSON):
 {
@@ -7058,7 +7121,7 @@ Rispondi SOLO con questo JSON (nessun testo fuori dal JSON):
 }`;
 
   const payload = {
-    contents: [{ parts: [{ text: `Crea itinerario: ${vals.zona||'Sicilia'}, ${vals.giorni} giorni, ${vals.chi}, ${vals.budget}, interessi: ${vals.interessi.join(',')||'vari'}` }] }],
+    contents: [{ parts: [{ text: `Crea itinerario CONCENTRATO nella zona ${vals.zona||'Sicilia'} (tappe vicine, niente lunghi spostamenti): ${vals.giorni} giorni, ${vals.chi}, ${vals.budget}, interessi: ${vals.interessi.join(',')||'vari'}` }] }],
     systemInstruction: { parts: [{ text: systemPrompt }] }
   };
 
@@ -7070,9 +7133,14 @@ Rispondi SOLO con questo JSON (nessun testo fuori dal JSON):
     // Risolvi tappe: match con dati app o segna come esterna
     const allRef = [...LUOGHI, ...RISTORANTI, ...SENTIERI, ...ALLOGGI_CONSIGLIATI];
     const tappeGrezze = [];
+    const _nomiVisti = new Set();
     (raw.giorni || []).forEach(gObj => {
       (gObj.tappe || []).forEach(tp => {
         const tL = (tp.nome||'').toLowerCase().trim();
+        if (!tL) return;
+        // Salta duplicati (stesso nome gia inserito nell'itinerario)
+        if (_nomiVisti.has(tL)) return;
+        _nomiVisti.add(tL);
         const match = allRef.find(p => p.name.toLowerCase() === tL)
                    || allRef.find(p => p.name.toLowerCase().includes(tL) || tL.includes(p.name.toLowerCase().split(' ')[0]));
         tappeGrezze.push({
