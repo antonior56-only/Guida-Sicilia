@@ -1861,6 +1861,48 @@ body.compact-itin .itin-tappa-card{ padding:6px 10px !important }
   border:1px solid rgba(199,92,26,.3);margin-left:6px;
 }
 
+
+/* ── FILTRI PROVINCIA / COMUNE ── */
+#filter-prov-row{
+  display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;
+}
+.chip-prov{
+  padding:4px 10px;border-radius:16px;font-size:11px;font-weight:700;
+  border:1.5px solid var(--border);background:#fff;cursor:pointer;
+  color:var(--muted);transition:all .15s;white-space:nowrap;
+}
+.chip-prov:hover{border-color:var(--sage);color:var(--sage)}
+.chip-prov.active{background:var(--forest);color:#fff;border-color:var(--forest)}
+#filter-comune-row{
+  display:none;align-items:center;gap:8px;margin-bottom:8px;
+}
+#filter-comune-row.visible{display:flex}
+#select-comune-luoghi{
+  flex:1;border:1.5px solid var(--border);border-radius:8px;
+  padding:6px 10px;font-size:12px;font-family:'DM Sans',sans-serif;
+  background:#fff;outline:none;color:var(--stone);cursor:pointer;
+}
+#select-comune-luoghi:focus{border-color:var(--sage)}
+.btn-reset-prov{
+  padding:5px 8px;border:1px solid var(--border);border-radius:7px;
+  background:#fff;cursor:pointer;font-size:12px;color:var(--muted);
+  font-family:'DM Sans',sans-serif;white-space:nowrap;flex-shrink:0;
+}
+.btn-reset-prov:hover{color:var(--rust);border-color:var(--rust)}
+
+
+/* ── IMPORT GOOGLE MAPS ── */
+.gmaps-import-row{background:rgba(66,133,244,.07);border:1.5px solid rgba(66,133,244,.25);border-radius:10px;padding:10px 12px;margin-bottom:14px;}
+.gmaps-import-row label{font-size:11px;font-weight:700;color:#1a73e8;display:block;margin-bottom:6px;}
+.gmaps-import-input{width:100%;border:1px solid rgba(66,133,244,.3);border-radius:7px;padding:7px 10px;font-size:12px;font-family:'DM Sans',sans-serif;outline:none;background:#fff;color:var(--text);box-sizing:border-box;}
+.gmaps-import-input:focus{border-color:#1a73e8}
+.gmaps-import-btns{display:flex;gap:6px;margin-top:8px}
+.btn-gmaps-parse{flex:1;padding:7px;border-radius:7px;border:none;cursor:pointer;font-size:11px;font-weight:700;font-family:'DM Sans',sans-serif;background:#1a73e8;color:#fff;}
+.btn-gmaps-parse:hover{background:#1557b0}
+.btn-gmaps-ai{flex:1;padding:7px;border-radius:7px;border:none;cursor:pointer;font-size:11px;font-weight:700;font-family:'DM Sans',sans-serif;background:var(--sage);color:#fff;}
+.btn-gmaps-ai:hover{background:var(--forest)}
+.gmaps-feedback{font-size:11px;margin-top:6px;min-height:16px;color:var(--sage);font-weight:600;}
+.gmaps-feedback.err{color:var(--rust)}
 /* ── ADMIN-ONLY ELEMENTS ── */
 .admin-only{ display:none !important }
 body.is-admin .admin-only{ display:inline-flex !important }
@@ -1964,6 +2006,17 @@ body.is-admin .admin-only-block{ display:block !important }
         <div id="ai-search-info"></div>
       <div class="filter-row" id="filter-luoghi">
             <!-- Popolato dinamicamente da popolaFiltriCategorieLuoghi() -->
+        </div>
+        <!-- Filtro provincia -->
+        <div id="filter-prov-row">
+          <!-- Popolato da popolaFiltriProvincia() -->
+        </div>
+        <!-- Filtro comune (compare dopo selezione provincia) -->
+        <div id="filter-comune-row">
+          <select id="select-comune-luoghi" onchange="filtraPerComune(this.value)">
+            <option value="">Tutti i comuni</option>
+          </select>
+          <button class="btn-reset-prov" onclick="resetFiltriGeo()" title="Reset filtri geografici">✕</button>
         </div>
         
 <div style="background:linear-gradient(135deg,#355c3a,#6c8c4a);color:#fff;
@@ -2359,8 +2412,21 @@ box-shadow:0 4px 14px rgba(0,0,0,.15)">
 </div>
 
 <div class="modal-overlay" id="ristorante-modal">
-  <div class="modal-box">
+    <div class="modal-box">
     <h2>🍽 Aggiungi ristorante</h2>
+        <div class="gmaps-import-row">
+      <label>🪄 Importa da Google Maps (o testo)</label>
+      <div style="display:flex;gap:6px">
+        <input class="gmaps-import-input" id="gmaps-input-rist" type="text"
+          placeholder="Incolla link Maps, nome del ristorante o testo…" style="flex:1"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();importaDaGMapsAI('rist')}"/>
+        <button class="btn-gmaps-parse" style="flex:0 0 auto;white-space:nowrap" onclick="importaDaGMapsAI('rist')" data-i18n="gmaps_importa_btn">Importa</button>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
+        <a href="https://www.google.com/maps/@37.6,14.0,8z" target="_blank" style="font-size:11px;color:#1a73e8;text-decoration:none" data-i18n="gmaps_apri">🗺 Apri Google Maps</a>
+      </div>
+      <div class="gmaps-feedback" id="gmaps-feedback-rist"></div>
+    </div>
     <div class="form-row">
       <label data-i18n="form_nome">Nome *</label>
       <input type="text" id="rist-nome" placeholder="Es. Trattoria da Luigi"/>
@@ -2484,8 +2550,21 @@ box-shadow:0 4px 14px rgba(0,0,0,.15)">
 </div>
 
 <div class="modal-overlay" id="luogo-modal">
-  <div class="modal-box">
+    <div class="modal-box">
     <h2>📍 Aggiungi luogo</h2>
+        <div class="gmaps-import-row">
+      <label>🪄 Importa da Google Maps (o testo)</label>
+      <div style="display:flex;gap:6px">
+        <input class="gmaps-import-input" id="gmaps-input-luogo" type="text"
+          placeholder="Incolla link Maps, nome del posto o testo…" style="flex:1"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();importaDaGMapsAI('luogo')}"/>
+        <button class="btn-gmaps-parse" style="flex:0 0 auto;white-space:nowrap" onclick="importaDaGMapsAI('luogo')" data-i18n="gmaps_importa_btn">Importa</button>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
+        <a href="https://www.google.com/maps/@37.6,14.0,8z" target="_blank" style="font-size:11px;color:#1a73e8;text-decoration:none" data-i18n="gmaps_apri">🗺 Apri Google Maps</a>
+      </div>
+      <div class="gmaps-feedback" id="gmaps-feedback-luogo"></div>
+    </div>
     <div class="form-row">
       <label data-i18n="form_nome">Nome *</label>
       <input type="text" id="luogo-nome" placeholder="Es. Valle dei Templi"/>
@@ -2531,8 +2610,21 @@ box-shadow:0 4px 14px rgba(0,0,0,.15)">
 </div>
 
 <div class="modal-overlay" id="alloggio-modal">
-  <div class="modal-box">
-    <h2>🏨 Aggiungi alloggio consigliato</h2>
+    <div class="modal-box">
+    <h2>🏨 🏨 Aggiungi alloggio consigliato</h2>
+        <div class="gmaps-import-row">
+      <label>🪄 Importa da Google Maps (o testo)</label>
+      <div style="display:flex;gap:6px">
+        <input class="gmaps-import-input" id="gmaps-input-alloggio" type="text"
+          placeholder="Incolla link Maps, nome dell'alloggio o testo…" style="flex:1"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();importaDaGMapsAI('alloggio')}"/>
+        <button class="btn-gmaps-parse" style="flex:0 0 auto;white-space:nowrap" onclick="importaDaGMapsAI('alloggio')" data-i18n="gmaps_importa_btn">Importa</button>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
+        <a href="https://www.google.com/maps/@37.6,14.0,8z" target="_blank" style="font-size:11px;color:#1a73e8;text-decoration:none" data-i18n="gmaps_apri">🗺 Apri Google Maps</a>
+      </div>
+      <div class="gmaps-feedback" id="gmaps-feedback-alloggio"></div>
+    </div>
     <div class="form-row">
       <label data-i18n="form_nome">Nome alloggio *</label>
       <input type="text" id="alloggio-nome" placeholder="Es. B&B Oasi"/>
@@ -3000,6 +3092,26 @@ const TRANSLATIONS = {
     itin_max_tappe_warn: 'tappe (molte!)',
     itin_vuoto: 'Itinerario vuoto.',
     info_nessun_luogo: 'Apri prima un luogo.',
+    prov_tutte: '🗺 Tutte le province',
+    opt_tutti_comuni: 'Tutti i comuni',
+    prov_filter_label: 'Provincia:',
+    gmaps_importa: '📍 Importa coordinate',
+    gmaps_arricchisci: '🤖 Arricchisci con AI',
+    gmaps_link_corto_titolo: 'Link corto: serve il link completo.',
+    gmaps_link_corto_step1: '1. Apri il link nello stesso browser',
+    gmaps_link_corto_step2: '2. Quando la mappa si apre, tocca i 3 puntini ⋮ in alto',
+    gmaps_link_corto_step3: '3. Scegli "Condividi" → "Copia link" e incollalo qui',
+    gmaps_link_corto_alt: 'Oppure usa il campo "cerca per nome" qui sotto ↓',
+    gmaps_no_coords: 'Coordinate non trovate. Copia il link dalla barra del browser.',
+    gmaps_inserisci_nome: 'Inserisci il nome o importa un link prima.',
+    gmaps_ai_ok: 'Descrizione e categoria generate!',
+    gmaps_apri: '🗺 Apri Google Maps',
+    gmaps_aggiorna_cat: '⚠️ Aggiorna la categoria manualmente.',
+    gmaps_verifica_coord: 'Coordinate stimate dall\'AI: verificale!',
+    gmaps_importa_btn: 'Importa',
+    gmaps_inserisci_qualcosa: 'Incolla un link, un nome o del testo.',
+    gmaps_analisi: 'Analisi in corso...',
+    gmaps_ok: 'Dati importati! Verifica e completa.',
   },
   en: {
     // Login
@@ -3344,6 +3456,26 @@ const TRANSLATIONS = {
     itin_max_tappe_warn: 'stops (many!)',
     itin_vuoto: 'Itinerary is empty.',
     info_nessun_luogo: 'Open a place first.',
+    prov_tutte: '🗺 All provinces',
+    opt_tutti_comuni: 'All municipalities',
+    prov_filter_label: 'Province:',
+    gmaps_importa: '📍 Import coordinates',
+    gmaps_arricchisci: '🤖 Enrich with AI',
+    gmaps_link_corto_titolo: 'Short link: the full link is needed.',
+    gmaps_link_corto_step1: '1. Open the link in the same browser',
+    gmaps_link_corto_step2: '2. When the map opens, tap the 3 dots ⋮ at the top',
+    gmaps_link_corto_step3: '3. Choose "Share" → "Copy link" and paste it here',
+    gmaps_link_corto_alt: 'Or use the "search by name" field below ↓',
+    gmaps_no_coords: 'Coordinates not found. Copy the link from the browser bar.',
+    gmaps_inserisci_nome: 'Enter a name or import a link first.',
+    gmaps_ai_ok: 'Description and category generated!',
+    gmaps_apri: '🗺 Open Google Maps',
+    gmaps_aggiorna_cat: '⚠️ Update the category manually.',
+    gmaps_verifica_coord: 'AI-estimated coordinates: please verify!',
+    gmaps_importa_btn: 'Import',
+    gmaps_inserisci_qualcosa: 'Paste a link, name or text.',
+    gmaps_analisi: 'Analyzing...',
+    gmaps_ok: 'Data imported! Check and complete.',
   }
 };
 
@@ -3493,7 +3625,373 @@ function closeInfo(){
   document.getElementById('chat-widget').style.display='flex';
 }
 
+
+// ═══════════════════════════════════════════════════════
+// IMPORT GOOGLE MAPS
+// ═══════════════════════════════════════════════════════
+const GMAPS_FIELDS = {
+  luogo:   {nome:'luogo-nome',lat:'luogo-lat',lng:'luogo-lng',desc:'luogo-desc',cat:null,       citta:null},
+  rist:    {nome:'rist-nome', lat:'rist-lat', lng:'rist-lng', desc:'rist-desc', cat:'rist-cat', citta:'rist-loc'},
+  alloggio:{nome:'alloggio-nome',lat:'alloggio-lat',lng:'alloggio-lng',desc:'alloggio-desc',cat:null,citta:'alloggio-loc'},
+};
+
+
+// ═══════════════════════════════════════════════════════
+// IMPORT UNIFICATO (modello Modena): link, nome o testo → AI
+// ═══════════════════════════════════════════════════════
+async function importaDaGMapsAI(tipo) {
+  const inp = document.getElementById('gmaps-input-' + tipo);
+  const fb  = document.getElementById('gmaps-feedback-' + tipo);
+  const fld = GMAPS_FIELDS[tipo];
+  if (!inp || !fb || !fld) return;
+
+  const testo = inp.value.trim();
+  if (!testo) { fb.className='gmaps-feedback err'; fb.textContent = t('gmaps_inserisci_qualcosa'); return; }
+
+  fb.className = 'gmaps-feedback';
+  fb.textContent = '\u29d7 ' + t('gmaps_analisi');
+
+  // STEP 1: prova a estrarre coordinate direttamente dal link (veloce, senza AI)
+  let lat = null, lon = null, nome = '';
+
+  // !3d!4d = coordinate precise del pin
+  let m = testo.match(/!3d(-?\d+\.?\d+).*?!4d(-?\d+\.?\d+)/);
+  if (m) { lat = parseFloat(m[1]); lon = parseFloat(m[2]); }
+  if (!lat) { m = testo.match(/@(-?\d+\.?\d+),(-?\d+\.?\d+)/); if (m){lat=parseFloat(m[1]);lon=parseFloat(m[2]);} }
+  if (!lat) { m = testo.match(/[?&]q=(-?\d+\.?\d+),(-?\d+\.?\d+)/); if (m){lat=parseFloat(m[1]);lon=parseFloat(m[2]);} }
+  if (!lat) { m = testo.match(/ll=(-?\d+\.?\d+),(-?\d+\.?\d+)/); if (m){lat=parseFloat(m[1]);lon=parseFloat(m[2]);} }
+
+  // Nome dal path /place/Nome/
+  const nm = testo.match(/\/place\/([^/@?!]+?)(?:\/|@|\?|!|$)/);
+  if (nm) { nome = decodeURIComponent(nm[1].replace(/\+/g,' ')).replace(/_/g,' ').trim(); if(nome.indexOf(',')>0) nome=nome.split(',')[0].trim(); }
+
+  // Se il testo NON è un link, è il nome stesso
+  const isLink = testo.includes('http') || testo.includes('maps');
+  if (!isLink && !nome) nome = testo;
+
+  // STEP 2: chiama AI per descrizione, categoria, città (e coordinate se mancanti)
+  const haCoord = lat && lon;
+  const catList = tipo==='rist' ? 'ristorante,bar,caffe,gelateria'
+                : tipo==='alloggio' ? 'hotel,b&b,agriturismo,villa,camping'
+                : 'cultura,natura,mare,arte,artigianato,religioso,borgo,altro';
+
+  let prompt = 'Analizza questo luogo turistico in Sicilia: "' + (nome||testo) + '"';
+  if (haCoord) prompt += ' (coordinate ' + lat + ', ' + lon + ')';
+  prompt += '.\nFornisci: 1) nome pulito del luogo, 2) descrizione turistica breve (max 50 parole), 3) categoria tra: ' + catList + ', 4) comune/citta';
+  if (!haCoord) prompt += ', 5) latitudine e longitudine GPS';
+  prompt += '.\nRispondi SOLO con JSON: {"nome":"...","descrizione":"...","categoria":"...","citta":"..."' + (haCoord?'':',"lat":0.0,"lon":0.0') + '}';
+
+  try {
+    const payload = { contents:[{parts:[{text:prompt}]}], systemInstruction:{parts:[{text:'Solo JSON valido. Sei un esperto di luoghi turistici siciliani.'}]} };
+    const raw = await fetchGeminiWithRetry(payload, true, false, 0, false);
+
+    if (raw && (raw.nome || raw.descrizione)) {
+      // Coordinate
+      if (!haCoord && raw.lat && raw.lon) { lat = parseFloat(raw.lat); lon = parseFloat(raw.lon); }
+      if (lat && lon) {
+        const le=document.getElementById(fld.lat); if(le) le.value=lat.toFixed(6);
+        const ge=document.getElementById(fld.lng); if(ge) ge.value=lon.toFixed(6);
+      }
+      // Nome
+      const ne=document.getElementById(fld.nome);
+      if(ne) ne.value = raw.nome || nome || testo;
+      // Descrizione
+      const de=document.getElementById(fld.desc);
+      if(de && raw.descrizione) de.value = raw.descrizione;
+      // Città
+      if(raw.citta && fld.citta){ const ce=document.getElementById(fld.citta); if(ce) ce.value=raw.citta; }
+      // Categoria
+      if(raw.categoria && fld.cat){ const ce=document.getElementById(fld.cat); if(ce){ const opts=Array.from(ce.options).map(o=>o.value); const cat=opts.find(o=>o.toLowerCase().includes(raw.categoria.toLowerCase())||raw.categoria.toLowerCase().includes(o)); if(cat) ce.value=cat; } }
+      // Mappa
+      if(lat && lon && typeof map!=='undefined' && window.L){
+        map.flyTo([lat,lon],14,{duration:1});
+        if(window._cercaNomeMarker){try{map.removeLayer(window._cercaNomeMarker);}catch(e){}}
+        window._cercaNomeMarker=L.marker([lat,lon]).addTo(map).bindPopup('\u2705 '+(raw.nome||nome)).openPopup();
+      }
+      const stimaCoord = !haCoord && raw.lat;
+      fb.textContent = '\u2705 ' + t('gmaps_ok')
+        + (raw.citta?' ('+raw.citta+')':'')
+        + (stimaCoord ? ' \u2014 \u26a0\ufe0f '+t('gmaps_verifica_coord') : '');
+    } else {
+      // Fallback: se l'AI non risponde ma ho almeno le coordinate dal link
+      if (haCoord) {
+        const le=document.getElementById(fld.lat); if(le) le.value=lat.toFixed(6);
+        const ge=document.getElementById(fld.lng); if(ge) ge.value=lon.toFixed(6);
+        if(nome){ const ne=document.getElementById(fld.nome); if(ne) ne.value=nome; }
+        fb.textContent = '\u2705 ' + lat.toFixed(5)+', '+lon.toFixed(5) + (nome?' \u00b7 '+nome:'') + ' \u2014 \u26a0\ufe0f '+t('gmaps_aggiorna_cat');
+      } else {
+        fb.className='gmaps-feedback err'; fb.textContent=t('err_ai');
+      }
+    }
+  } catch(e) {
+    // Se AI fallisce ma ho coordinate dal link, usa quelle
+    if (haCoord) {
+      const le=document.getElementById(fld.lat); if(le) le.value=lat.toFixed(6);
+      const ge=document.getElementById(fld.lng); if(ge) ge.value=lon.toFixed(6);
+      if(nome){ const ne=document.getElementById(fld.nome); if(ne) ne.value=nome; }
+      fb.textContent = '\u2705 ' + lat.toFixed(5)+', '+lon.toFixed(5) + (nome?' \u00b7 '+nome:'') + ' \u2014 \u26a0\ufe0f '+t('gmaps_aggiorna_cat');
+    } else {
+      fb.className='gmaps-feedback err'; fb.textContent=t('err_ai');
+    }
+  }
+}
+
+function parseGMapsLink(tipo) {
+  const inp = document.getElementById('gmaps-input-' + tipo);
+  const fb  = document.getElementById('gmaps-feedback-' + tipo);
+  const fld = GMAPS_FIELDS[tipo];
+  if (!inp || !fb || !fld) return;
+  const url = inp.value.trim();
+  if (!url) { fb.textContent = ''; return; }
+  fb.className = 'gmaps-feedback';
+  fb.textContent = '\u29d7 Analisi...';
+
+  let lat = null, lon = null, nome = '';
+
+  // Priorità 1: !3d!4d — coordinate PRECISE del luogo (non il centro mappa)
+  let m = url.match(/!3d(-?\d+\.?\d+).*?!4d(-?\d+\.?\d+)/);
+  if (m) { lat = parseFloat(m[1]); lon = parseFloat(m[2]); }
+
+  // Priorità 2: /@lat,lon — centro mappa (meno preciso)
+  if (!lat) {
+    m = url.match(/@(-?\d+\.?\d+),(-?\d+\.?\d+)/);
+    if (m) { lat = parseFloat(m[1]); lon = parseFloat(m[2]); }
+  }
+
+  // Priorità 3: ?q=lat,lon
+  if (!lat) {
+    m = url.match(/[?&]q=(-?\d+\.?\d+),(-?\d+\.?\d+)/);
+    if (m) { lat = parseFloat(m[1]); lon = parseFloat(m[2]); }
+  }
+
+  // Priorità 4: ll=lat,lon
+  if (!lat) {
+    m = url.match(/ll=(-?\d+\.?\d+),(-?\d+\.?\d+)/);
+    if (m) { lat = parseFloat(m[1]); lon = parseFloat(m[2]); }
+  }
+
+  // Nome dal path /place/Nome+Luogo/
+  const nm = url.match(/\/place\/([^/@?!]+?)(?:\/|@|\?|!|$)/);
+  if (nm) {
+    nome = decodeURIComponent(nm[1].replace(/\+/g, ' ')).replace(/_/g, ' ').trim();
+    // Se contiene virgola: separa nome e città
+    if (nome.indexOf(',') > 0) nome = nome.split(',')[0].trim();
+  }
+  // Fallback ?q=
+  if (!nome) {
+    const nq = url.match(/[?&]q=([^&@#,/]+)/);
+    if (nq) nome = decodeURIComponent(nq[1].replace(/\+/g, ' ')).trim();
+  }
+
+  if (lat && lon) {
+    // Imposta coordinate
+    const le = document.getElementById(fld.lat); if (le) le.value = lat.toFixed(6);
+    const ge = document.getElementById(fld.lng); if (ge) ge.value = lon.toFixed(6);
+    // Imposta nome
+    if (nome) { const ne = document.getElementById(fld.nome); if (ne) ne.value = nome; }
+    // Feedback immediato
+    fb.textContent = '\u2705 ' + lat.toFixed(5) + ', ' + lon.toFixed(5)
+      + (nome ? ' \u00b7 ' + nome : '')
+      + ' \u2014 \u23f3 Ricerca città...';
+    // Geocoding inverso per trovare la città
+    reverseGeocode(lat, lon, function(citta, comune) {
+      if (citta && fld.citta) {
+        const ce = document.getElementById(fld.citta);
+        if (ce) ce.value = comune || citta;
+      }
+      fb.textContent = '\u2705 ' + lat.toFixed(5) + ', ' + lon.toFixed(5)
+        + (nome ? ' \u00b7 ' + nome : '')
+        + (citta ? ' (' + citta + ')' : '')
+        + ' \u2014 \u26a0\ufe0f ' + t('gmaps_aggiorna_cat');
+    });
+  } else if (url.includes('goo.gl') || url.includes('maps.app')) {
+    fb.className = 'gmaps-feedback err';
+    fb.innerHTML = '\u26a0\ufe0f <b>' + t('gmaps_link_corto_titolo') + '</b><br>'
+      + t('gmaps_link_corto_step1') + '<br>'
+      + t('gmaps_link_corto_step2') + '<br>'
+      + t('gmaps_link_corto_step3') + '<br>'
+      + '<span style="color:var(--muted);font-size:10px">' + t('gmaps_link_corto_alt') + '</span>';
+  } else if (url.length > 10) {
+    fb.className = 'gmaps-feedback err';
+    fb.textContent = '\u274c ' + t('gmaps_no_coords');
+  } else {
+    fb.textContent = '';
+  }
+}
+
+// Geocoding inverso con Nominatim (gratuito, nessuna API key)
+
+// Cerca coordinate per nome con Nominatim
+async function cercaPerNome(tipo) {
+  const campoEl = document.getElementById('gmaps-cerca-nome-' + tipo);
+  const fb      = document.getElementById('gmaps-feedback-' + tipo);
+  const fld     = GMAPS_FIELDS[tipo];
+  if (!campoEl || !fb || !fld) return;
+
+  const query = campoEl.value.trim();
+  if (!query) { fb.textContent = '⚠️ Inserisci un nome da cercare.'; fb.className='gmaps-feedback err'; return; }
+
+  fb.className = 'gmaps-feedback';
+  fb.textContent = '⧗ Ricerca in corso...';
+
+  try {
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=it&q='
+      + encodeURIComponent(query)
+      + '&accept-language=it';
+    const res = await fetch(url, { headers: { 'User-Agent': 'SiciliaTurismo/1.0' } });
+    const results = await res.json();
+
+    // Filtra risultati in Sicilia (lat 36.5-38.4, lon 11.8-15.7)
+    const sicilia = results.filter(function(r) {
+      const lat = parseFloat(r.lat), lon = parseFloat(r.lon);
+      return lat >= 36.5 && lat <= 38.4 && lon >= 11.8 && lon <= 15.7;
+    });
+
+    const best = sicilia.length > 0 ? sicilia[0] : results[0];
+
+    if (!best) {
+      fb.className = 'gmaps-feedback err';
+      fb.textContent = '❌ Nessun risultato trovato. Prova ad aggiungere la città (es. "Bar Roma, Palermo").';
+      return;
+    }
+
+    const lat = parseFloat(best.lat), lon = parseFloat(best.lon);
+    const nome = best.namedetails?.name || best.name || query.split(',')[0].trim();
+    const addr = best.address || {};
+    const citta = addr.city || addr.town || addr.village || addr.county || '';
+
+    // Imposta campi
+    const le = document.getElementById(fld.lat); if (le) le.value = lat.toFixed(6);
+    const ge = document.getElementById(fld.lng); if (ge) ge.value = lon.toFixed(6);
+    const ne = document.getElementById(fld.nome); if (ne && !ne.value.trim()) ne.value = nome;
+    if (citta && fld.citta) { const ce = document.getElementById(fld.citta); if (ce) ce.value = citta; }
+
+    fb.textContent = '✅ ' + lat.toFixed(5) + ', ' + lon.toFixed(5)
+      + ' · ' + nome
+      + (citta ? ' (' + citta + ')' : '')
+      + ' — ⚠️ ' + t('gmaps_aggiorna_cat');
+
+    // Mostra sulla mappa
+    if (typeof map !== 'undefined' && window.L) {
+      map.flyTo([lat, lon], 15, { duration: 1 });
+      if (window._cercaNomeMarker) { try { map.removeLayer(window._cercaNomeMarker); } catch(e){} }
+      window._cercaNomeMarker = L.marker([lat, lon])
+        .addTo(map)
+        .bindPopup('✅ ' + nome)
+        .openPopup();
+    }
+
+  } catch(e) {
+    fb.className = 'gmaps-feedback err';
+    fb.textContent = '❌ Errore nella ricerca. Controlla la connessione.';
+  }
+}
+
+function reverseGeocode(lat, lon, callback) {
+  const url = 'https://nominatim.openstreetmap.org/reverse?format=json&lat='
+    + lat + '&lon=' + lon + '&zoom=10&accept-language=it';
+  fetch(url, { headers: { 'Accept-Language': 'it', 'User-Agent': 'SiciliaTurismo/1.0' } })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      const addr = data.address || {};
+      const citta = addr.city || addr.town || addr.village || addr.county || '';
+      const comune = addr.municipality || addr.city || addr.town || addr.village || '';
+      callback(citta, comune);
+    })
+    .catch(function() { callback('', ''); });
+}
+
+
+async function arricchisciConAI(tipo) {
+  const fld = GMAPS_FIELDS[tipo];
+  if (!fld) return;
+  const ne = document.getElementById(fld.nome);
+  const de = document.getElementById(fld.desc);
+  const le = document.getElementById(fld.lat);
+  const ge = document.getElementById(fld.lng);
+  const fb = document.getElementById('gmaps-feedback-' + tipo);
+  // Nome: dal campo nome, o dal campo "cerca per nome", o dal link incollato
+  let nome = ne ? ne.value.trim() : '';
+  if (!nome) {
+    const cerca = document.getElementById('gmaps-cerca-nome-' + tipo);
+    if (cerca) nome = cerca.value.trim();
+  }
+  const lat = le ? le.value.trim() : '';
+  const lon = ge ? ge.value.trim() : '';
+
+  if (!nome && !lat) {
+    if (fb) { fb.className = 'gmaps-feedback err'; fb.textContent = t('gmaps_inserisci_nome'); }
+    return;
+  }
+  if (fb) { fb.className = 'gmaps-feedback'; fb.textContent = '🤖 ' + t('ai_generazione'); }
+
+  const haCoord = lat && lon;
+  const catList = tipo === 'rist' ? 'ristorante,bar,caffe,gelateria'
+                : tipo === 'alloggio' ? 'hotel,b&b,agriturismo,villa,camping'
+                : 'cultura,natura,mare,arte,artigianato,religioso,borgo,altro';
+
+  // Prompt: se non ho coordinate, chiedo anche quelle
+  let prompt = 'Per il luogo turistico in Sicilia chiamato "' + nome + '"';
+  if (haCoord) prompt += ' (coordinate ' + lat + ', ' + lon + ')';
+  prompt += ':\n1. Descrizione turistica breve (max 60 parole)\n2. Categoria tra: ' + catList + '\n3. Comune/citta in cui si trova';
+  if (!haCoord) prompt += '\n4. Latitudine e longitudine GPS approssimative';
+  prompt += '\nRispondi SOLO con JSON: {"descrizione":"...","categoria":"...","citta":"..."'
+         + (haCoord ? '' : ',"lat":00.0000,"lon":00.0000') + '}';
+
+  try {
+    const payload = { contents:[{parts:[{text:prompt}]}], systemInstruction:{parts:[{text:'Solo JSON valido, nessun testo aggiuntivo.'}]} };
+    const raw = await fetchGeminiWithRetry(payload, true, false, 0, false);
+    if (raw && raw.descrizione) {
+      if (de) de.value = raw.descrizione;
+      // Coordinate da AI se mancanti
+      if (!haCoord && raw.lat && raw.lon) {
+        if (le) le.value = parseFloat(raw.lat).toFixed(6);
+        if (ge) ge.value = parseFloat(raw.lon).toFixed(6);
+      }
+      // Nome se mancante
+      if (ne && !ne.value.trim() && nome) ne.value = nome;
+      // Citta
+      if (raw.citta && fld.citta) {
+        const ce = document.getElementById(fld.citta);
+        if (ce && !ce.value.trim()) ce.value = raw.citta;
+      }
+      // Categoria
+      if (raw.categoria && fld.cat) {
+        const ce = document.getElementById(fld.cat);
+        if (ce) { const opts = Array.from(ce.options).map(o=>o.value); const cat = opts.find(o=>o.toLowerCase().includes(raw.categoria.toLowerCase())||raw.categoria.toLowerCase().includes(o)); if(cat) ce.value=cat; }
+      }
+      // Mostra su mappa se ci sono coordinate
+      const fLat = le ? parseFloat(le.value) : null;
+      const fLon = ge ? parseFloat(ge.value) : null;
+      if (fLat && fLon && typeof map !== 'undefined' && window.L) {
+        map.flyTo([fLat, fLon], 14, { duration: 1 });
+        if (window._cercaNomeMarker) { try{map.removeLayer(window._cercaNomeMarker);}catch(e){} }
+        window._cercaNomeMarker = L.marker([fLat, fLon]).addTo(map).bindPopup('✅ ' + nome).openPopup();
+      }
+      if (fb) {
+        fb.textContent = '✅ ' + t('gmaps_ai_ok')
+          + (raw.citta ? ' (' + raw.citta + ')' : '')
+          + (!haCoord && raw.lat ? ' \u2014 \u26a0\ufe0f ' + t('gmaps_verifica_coord') : '');
+      }
+    } else {
+      if (fb) { fb.className='gmaps-feedback err'; fb.textContent=t('err_ai'); }
+    }
+  } catch(e) {
+    if (fb) { fb.className='gmaps-feedback err'; fb.textContent=t('err_ai'); }
+  }
+}
+
+
+function resetGMapsImport(tipo) {
+  const i = document.getElementById('gmaps-input-' + tipo);
+  const f = document.getElementById('gmaps-feedback-' + tipo);
+  if(i) i.value='';
+  if(f){f.textContent='';f.className='gmaps-feedback';}
+  if(window._cercaNomeMarker){ try{map.removeLayer(window._cercaNomeMarker);}catch(e){} window._cercaNomeMarker=null; }
+}
+
 function openLuogoModal() {
+  resetGMapsImport('luogo');
   ['luogo-nome','luogo-desc','luogo-lat','luogo-lng'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('luogo-modal').classList.add('open');
 }
@@ -3502,10 +4000,12 @@ function openSentieroModal() {
   document.getElementById('sentiero-modal').classList.add('open');
 }
 function openRistoranteModal() {
+  resetGMapsImport('rist');
   ['rist-nome','rist-loc','rist-cucina','rist-desc','rist-lat','rist-lng'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('ristorante-modal').classList.add('open');
 }
 function openAlloggioModal() {
+  resetGMapsImport('alloggio');
   ['alloggio-nome','alloggio-loc','alloggio-prezzo','alloggio-voto','alloggio-desc','alloggio-lat','alloggio-lng'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('alloggio-modal').classList.add('open');
 }
@@ -3733,9 +4233,11 @@ function _doUpdateMap() {
   const qL = document.getElementById('search-luoghi').value.toLowerCase();
   LUOGHI.forEach(p => {
     if(filterPreferitiActive && VALUTAZIONI[p.name] !== '❤️') return;
-    const catOK = activeLuoghiCats.has('tutte') || activeLuoghiCats.has(p.cat);
-    const txtOK = !qL || (p.name+p.desc+p.cat).toLowerCase().includes(qL);
-    if(catOK && txtOK && p.coords) {
+    const catOK  = activeLuoghiCats.has('tutte') || activeLuoghiCats.has(p.cat);
+    const txtOK  = !qL || (p.name+p.desc+p.cat+(p.comune||'')).toLowerCase().includes(qL);
+    const provOK = !_filtroProvAttiva  || (p.prov === _filtroProvAttiva);
+    const comOK  = !_filtroComuneAttivo || (p.comune === _filtroComuneAttivo || p.loc === _filtroComuneAttivo);
+    if(catOK && txtOK && provOK && comOK && p.coords) {
       const m = L.marker(p.coords, {icon: makeIcon(p.cat)});
       m.on('click', () => handleCardClick(p.name, 'luogo', p.coords));
       markerClusterGroup.addLayer(m);
@@ -4074,6 +4576,101 @@ function popolaFiltriCitta() {
     selAlloggi.innerHTML = `<option value="tutte">${t('opt_tutte_citta')}</option>` + cittaAlloggi.map(c => `<option value="${c}">${c}</option>`).join('');
 }
 
+
+// ════════════════════════════════════════════════════════
+// FILTRI GEOGRAFICI: provincia → comune
+// ════════════════════════════════════════════════════════
+
+// Nomi leggibili delle province siciliane
+const PROV_LABEL = {
+  PA:'Palermo', CT:'Catania', ME:'Messina', AG:'Agrigento',
+  TP:'Trapani', SR:'Siracusa', RG:'Ragusa', EN:'Enna',
+  CL:'Caltanissetta', RC:'Reggio C.'
+};
+
+function popolaFiltriProvincia() {
+  const row = document.getElementById('filter-prov-row');
+  if (!row) return;
+
+  // Raccoglie province presenti in LUOGHI + altri array
+  const tutti = [...LUOGHI, ...RISTORANTI, ...SENTIERI, ...ALLOGGI_CONSIGLIATI];
+  const provSet = [...new Set(tutti.map(p => p.prov).filter(Boolean))].sort();
+
+  row.innerHTML = '';
+
+  // Chip "Tutte"
+  const allChip = document.createElement('span');
+  allChip.className = 'chip-prov' + (!_filtroProvAttiva ? ' active' : '');
+  allChip.textContent = t('prov_tutte');
+  allChip.onclick = () => { _filtroProvAttiva = ''; _filtroComuneAttivo = ''; aggiornaFiltriGeo(); };
+  row.appendChild(allChip);
+
+  // Chip per ogni provincia
+  provSet.forEach(prov => {
+    const chip = document.createElement('span');
+    chip.className = 'chip-prov' + (_filtroProvAttiva === prov ? ' active' : '');
+    chip.textContent = PROV_LABEL[prov] || prov;
+    chip.dataset.prov = prov;
+    chip.onclick = function() {
+      _filtroProvAttiva = prov;
+      _filtroComuneAttivo = '';
+      aggiornaFiltriGeo();
+    };
+    row.appendChild(chip);
+  });
+}
+
+function aggiornaFiltriGeo() {
+  // Aggiorna chip province
+  document.querySelectorAll('.chip-prov').forEach(c => {
+    c.classList.toggle('active',
+      !_filtroProvAttiva ? !c.dataset.prov : c.dataset.prov === _filtroProvAttiva
+    );
+  });
+
+  // Mostra/nascondi select comune
+  const comuneRow = document.getElementById('filter-comune-row');
+  if (comuneRow) {
+    if (_filtroProvAttiva) {
+      comuneRow.classList.add('visible');
+      popolaSelectComune(_filtroProvAttiva);
+    } else {
+      comuneRow.classList.remove('visible');
+    }
+  }
+
+  renderLuoghi();
+  updateMap();
+}
+
+function popolaSelectComune(prov) {
+  const sel = document.getElementById('select-comune-luoghi');
+  if (!sel) return;
+
+  // Raccoglie comuni della provincia selezionata
+  const tutti = [...LUOGHI, ...RISTORANTI, ...SENTIERI, ...ALLOGGI_CONSIGLIATI];
+  const comuni = [...new Set(
+    tutti.filter(p => p.prov === prov)
+         .map(p => p.comune || p.loc || '')
+         .filter(Boolean)
+  )].sort();
+
+  sel.innerHTML = '<option value="">' + t('opt_tutti_comuni') + '</option>'
+    + comuni.map(c => '<option value="' + c + '"' + (_filtroComuneAttivo === c ? ' selected' : '') + '>' + c + '</option>').join('');
+}
+
+function filtraPerComune(comune) {
+  _filtroComuneAttivo = comune;
+  renderLuoghi();
+  updateMap();
+}
+
+function resetFiltriGeo() {
+  _filtroProvAttiva = '';
+  _filtroComuneAttivo = '';
+  aggiornaFiltriGeo();
+}
+
 function popolaFiltriCategorieLuoghi() {
     const macroCats = [...new Set(LUOGHI.map(l => l.cat))].filter(Boolean);
     const flEl = document.getElementById('filter-luoghi');
@@ -4247,14 +4844,18 @@ function filterAlloggi() { renderAlloggi(); updateMap(); }
 
 // ── LUOGHI ──
 let activeLuoghiCats = new Set(['tutte']);
+let _filtroProvAttiva = '';   // sigla provincia selezionata o ''
+let _filtroComuneAttivo = ''; // nome comune selezionato o ''
 
 function renderLuoghi(){
   const q = document.getElementById('search-luoghi').value.toLowerCase();
   const filtered = LUOGHI.filter(p => {
-    if(filterPreferitiActive && VALUTAZIONI[p.name] !== '❤️') return false;
-    const catOK = activeLuoghiCats.has('tutte') || activeLuoghiCats.has(p.cat);
-    const txtOK = !q || (p.name+p.desc+p.cat).toLowerCase().includes(q);
-    return catOK && txtOK;
+    if (filterPreferitiActive && VALUTAZIONI[p.name] !== '❤️') return false;
+    const catOK  = activeLuoghiCats.has('tutte') || activeLuoghiCats.has(p.cat);
+    const txtOK  = !q || (p.name+p.desc+p.cat+(p.comune||'')+(p.prov||'')).toLowerCase().includes(q);
+    const provOK = !_filtroProvAttiva  || (p.prov === _filtroProvAttiva);
+    const comOK  = !_filtroComuneAttivo || (p.comune === _filtroComuneAttivo || p.loc === _filtroComuneAttivo);
+    return catOK && txtOK && provOK && comOK;
   }).sort((a,b)=>a.name.localeCompare(b.name,'it'));
   
   const list = document.getElementById('list-luoghi');
@@ -6300,67 +6901,6 @@ function avviaAscolto() {
   recognition.start();
 }
 
-function leggiAdAltaVoce(testo) {
-  if(!window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(testo);
-  u.lang = 'it-IT';
-  u.rate = 0.95;
-  window.speechSynthesis.speak(u);
-}
-
-/* ── FUNZIONE TOGGLE AI ── */
-async function generaGuidaAI(mode) {
-  const textDiv = document.getElementById('info-ai-text');
-  const nome = textDiv.dataset.nome;
-  const btnTesto = document.getElementById('btn-ai-testo');
-  const btnAudio = document.getElementById('btn-ai-audio');
-
-  btnTesto.classList.remove('active');
-  btnAudio.classList.remove('active');
-
-  if (mode === 'testo') {
-    btnTesto.classList.add('active');
-    if(window.speechSynthesis) window.speechSynthesis.cancel(); // Ferma l'audio se in riproduzione
-  } else {
-    btnAudio.classList.add('active');
-  }
-
-  // Se il testo è già stato generato per questo luogo, evito di richiamare le API
-  if (textDiv.innerHTML && !textDiv.innerHTML.includes(t('ai_generazione')) && !textDiv.innerHTML.includes('Error') && !textDiv.innerHTML.includes('Errore')) {
-     textDiv.style.display = 'block';
-     if (mode === 'audio') leggiAdAltaVoce(textDiv.innerText);
-     return;
-  }
-
-  // Richiesta API
-  btnTesto.disabled = true;
-  btnAudio.disabled = true;
-  if (mode === 'testo') btnTesto.innerHTML = "⏳ Genero...";
-  else btnAudio.innerHTML = "⏳ Genero...";
-
-  textDiv.style.display = 'block';
-  textDiv.innerHTML = `<span class="spinner" style="width:12px;height:12px;border-top-color:var(--sage)"></span> ${t('ai_generazione')}`;
-
-  try {
-     const prompt = `Sei una guida turistica della Sicilia. Scrivi un racconto evocativo, molto dettagliato e appassionante sul luogo "${nome}". Includi curiosità e descrizioni dell'atmosfera. Nessuna formattazione speciale, solo testo pulito.`;
-     const text = await fetchGeminiWithRetry({ contents: [{ parts: [{ text: prompt }] }] }, false);
-
-     const cleanText = text.replace(/\*/g, '');
-     textDiv.innerHTML = cleanText.replace(/\n/g, '<br>');
-
-     if (mode === 'audio') {
-         leggiAdAltaVoce(cleanText);
-     }
-  } catch (e) {
-     textDiv.innerHTML = `<span style='color:var(--rust)'>${t('err_rete')}</span>`;
-  } finally {
-     btnTesto.disabled = false;
-     btnAudio.disabled = false;
-     btnTesto.innerHTML = "📝 Leggi";
-     btnAudio.innerHTML = "🎧 Ascolta";
-  }
-}
 
 async function fetchElevationProfile(coordsArray, el) {
    el.innerHTML = `<span class="spinner" style="width:12px;height:12px;border-top-color:var(--sage)"></span> ${t('ai_calcolo_altimetria')}`;
@@ -7229,6 +7769,7 @@ function avviaApp() {
   
   // 4. Popola dinamicamente le categorie disponibili nei Luoghi
   popolaFiltriCategorieLuoghi();
+  popolaFiltriProvincia();
 
   const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OSM' });
   const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles © Esri' });
