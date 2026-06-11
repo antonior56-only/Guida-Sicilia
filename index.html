@@ -2711,7 +2711,15 @@ box-shadow:0 4px 14px rgba(0,0,0,.15)">
     
     <div style="background:#fff7e8;border:1px solid #f0d18a;border-radius:10px;padding:12px;margin-bottom:16px">
       <h4 style="font-size:14px;color:var(--rust);margin-bottom:6px">🤖 Intelligenza Artificiale</h4>
-      <p style="font-size:12px;color:#555;margin-bottom:8px">Rimuovi la chiave Gemini se vuoi cambiarla o disattivare temporaneamente l'AI.</p>
+      <p style="font-size:12px;color:#555;margin-bottom:6px" data-i18n="settings_model_label">Modello Gemini da usare per le funzioni AI:</p>
+      <select id="select-gemini-model" onchange="salvaModelloAI(this.value)" style="width:100%;border:1.5px solid #f0d18a;border-radius:8px;padding:8px 10px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;outline:none;margin-bottom:10px">
+        <option value="">🔄 Automatico — sceglie il migliore disponibile (consigliato)</option>
+        <option value="gemini-2.5-flash">Gemini 2.5 Flash — veloce ed economico</option>
+        <option value="gemini-2.5-pro">Gemini 2.5 Pro — più potente, più lento</option>
+        <option value="gemini-2.0-flash">Gemini 2.0 Flash — alternativa veloce</option>
+        <option value="gemini-flash-latest">Gemini Flash Latest — sempre l'ultima versione flash</option>
+      </select>
+      <p style="font-size:12px;color:#555;margin-bottom:8px" data-i18n="settings_key_desc">Rimuovi la chiave Gemini se vuoi cambiarla o disattivare temporaneamente l'AI.</p>
       <button class="btn btn-outline" onclick="rimuoviApiKey()" style="font-size:12px;width:100%;border-color:var(--rust);color:var(--rust)">Rimuovi API Key salvata</button>
     </div>
 
@@ -3134,6 +3142,8 @@ const TRANSLATIONS = {
     gmaps_analisi: 'Analisi in corso...',
     gmaps_ok: 'Dati importati! Verifica e completa.',
     itin_dist_giorno: 'Percorso del giorno',
+    settings_model_label: 'Modello Gemini da usare per le funzioni AI:',
+    settings_key_desc: 'Rimuovi la chiave Gemini se vuoi cambiarla o disattivare temporaneamente l\'AI.',
   },
   en: {
     // Login
@@ -3499,6 +3509,8 @@ const TRANSLATIONS = {
     gmaps_analisi: 'Analyzing...',
     gmaps_ok: 'Data imported! Check and complete.',
     itin_dist_giorno: 'Day route',
+    settings_model_label: 'Gemini model for AI features:',
+    settings_key_desc: 'Remove the Gemini key to change it or temporarily disable AI.',
   }
 };
 
@@ -4035,12 +4047,32 @@ function openAlloggioModal() {
 
 function apriImpostazioni() {
   document.getElementById('settings-modal').classList.add('open');
+  caricaModelloAISelector();
 }
 
 function rimuoviApiKey() {
   localStorage.removeItem('sicilia_gemini_key');
   showToast("API Key rimossa con successo");
   closeModal('settings-modal');
+}
+
+// Salva il modello AI scelto
+function salvaModelloAI(model) {
+  if (!model) {
+    // "Automatico": rimuovi override manuale e cache auto (verra rifatto il discovery)
+    localStorage.removeItem('sicilia_gemini_model');
+    localStorage.removeItem('sicilia_gemini_model_auto');
+    showToast('\uD83D\uDD04 Modello AI: automatico');
+  } else {
+    localStorage.setItem('sicilia_gemini_model', model);
+    showToast('\u2705 Modello AI: ' + model);
+  }
+}
+
+// Carica il modello salvato nel selettore (chiamata all'apertura impostazioni)
+function caricaModelloAISelector() {
+  const sel = document.getElementById('select-gemini-model');
+  if (sel) sel.value = localStorage.getItem('sicilia_gemini_model') || '';
 }
 
 function cancellaTuttiIDati() {
@@ -6838,6 +6870,52 @@ function askForApiKeyModal() {
   });
 }
 
+
+// ═══════════════════════════════════════════════════════
+// SELEZIONE MODELLO AI: manuale (override) o auto-discovery
+// ═══════════════════════════════════════════════════════
+// Lista di preferenza (dal migliore al fallback)
+const MODELLI_PREFERITI = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest', 'gemini-1.5-flash'];
+
+async function getModelloAI(activeKey) {
+  // 1. Se l'utente ha scelto manualmente un modello, usa quello (override)
+  const manuale = localStorage.getItem('sicilia_gemini_model');
+  if (manuale) return manuale;
+
+  // 2. Se l'auto-discovery e gia stato fatto, usa il risultato memorizzato
+  const auto = localStorage.getItem('sicilia_gemini_model_auto');
+  if (auto) return auto;
+
+  // 3. Auto-discovery: chiedi a Google la lista dei modelli dell'account
+  try {
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models?key=' + activeKey;
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 6000);
+    const res = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(tid);
+    if (res.ok) {
+      const data = await res.json();
+      const disponibili = (data.models || [])
+        .filter(function(m){ return (m.supportedGenerationMethods||[]).includes('generateContent'); })
+        .map(function(m){ return (m.name||'').replace('models/',''); });
+      // Scegli il primo modello preferito che e disponibile
+      for (const pref of MODELLI_PREFERITI) {
+        if (disponibili.includes(pref)) {
+          localStorage.setItem('sicilia_gemini_model_auto', pref);
+          return pref;
+        }
+      }
+      // Se nessun preferito, prova un qualsiasi modello flash disponibile
+      const flash = disponibili.find(function(m){ return m.includes('flash'); });
+      if (flash) { localStorage.setItem('sicilia_gemini_model_auto', flash); return flash; }
+    }
+  } catch(e) { /* discovery fallita, usa il fallback */ }
+
+  // 4. Fallback sicuro
+  return 'gemini-2.5-flash';
+}
+
+
 async function fetchGeminiWithRetry(payload, isJson = false, isVision = false, retryCount = 0, jsonSchema = null) {
   const MAX_RETRIES = 2;
   let activeKey = localStorage.getItem('sicilia_gemini_key') || apiKey;
@@ -6866,7 +6944,8 @@ async function fetchGeminiWithRetry(payload, isJson = false, isVision = false, r
     }
   }
 
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${activeKey}`;
+  const modelloAI = await getModelloAI(activeKey);
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelloAI}:generateContent?key=${activeKey}`;
   const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
 
   if (!response.ok) {
@@ -7104,14 +7183,13 @@ async function generaItinerarioWizard() {
   btn.innerHTML = `<span class="spinner" style="border-top-color:#fff"></span> ${t('ai_generazione')}`;
   btn.disabled = true;
 
-  // Luoghi dell'app filtrati per zona (suggeriti all'AI, non obbligatori)
-  const luoghiFiltrati = wzFiltraLuoghiPerZona(vals.zona);
-  const appPlaces = (luoghiFiltrati && luoghiFiltrati.length > 0
-    ? luoghiFiltrati
-    : [...LUOGHI, ...RISTORANTI, ...SENTIERI]).slice(0, 50);
+  // Luoghi dell'app SOLO della zona richiesta (suggeriti con priorita, non obbligatori)
+  const luoghiFiltrati = wzFiltraLuoghiPerZona(vals.zona) || [];
+  const appPlaces = luoghiFiltrati.slice(0, 50);
   const luoghiAppStr = appPlaces.map(p =>
     `"${p.name}" (${p.comune||p.prov||'Sicilia'}, ${p.cat||p.tipo||''}, tags:[${(p.tags||[]).join(',')}])`
   ).join('; ');
+  const haLuoghiZona = appPlaces.length > 0;
 
   const budgetMap = { economico: currentLang==='en'?'budget':'economico', medio: currentLang==='en'?'mid-range':'medio', alto: currentLang==='en'?'luxury':'alto' };
   const chiMap    = { solo: currentLang==='en'?'solo traveller':'viaggiatore solo', coppia: currentLang==='en'?'couple':'coppia', famiglia: currentLang==='en'?'family with children':'famiglia con bambini', amici: currentLang==='en'?'group of friends':'gruppo di amici' };
@@ -7121,10 +7199,10 @@ async function generaItinerarioWizard() {
 Crea un itinerario di ${vals.giorni} giorni per: ${chiMap[vals.chi]}, budget ${budgetMap[vals.budget]}, interessi: ${vals.interessi.join(', ') || 'generali'}.
 === VINCOLO GEOGRAFICO OBBLIGATORIO ===\nZONA BASE: ${vals.zona || 'Sicilia intera'}.\nREGOLE: 1) TUTTE le tappe nella zona di ${vals.zona || 'Sicilia'} o entro 30-40 km. Se zona = una citta, resta in quella citta e dintorni. 2) NON tappe in zone lontane (zona Palermo => NIENTE Catania/Siracusa/Taormina). 3) Ogni giornata COMPATTA: tappe dello stesso giorno entro 20-25 km tra loro. 4) Ordina le tappe del giorno per vicinanza (nearest-neighbor).
 
-Hai a disposizione questi luoghi già presenti nell'app — usali con PREFERENZA quando sono pertinenti (copia il nome ESATTO):
-${luoghiAppStr || 'nessuno per questa zona'}.
-
-Puoi aggiungere liberamente altri luoghi REALI della Sicilia non presenti nell'elenco sopra, per rendere l'itinerario più completo e interessante. Per queste tappe aggiuntive aggiungi "esterno": true.
+${haLuoghiZona
+  ? 'Questi luoghi della zona sono GIA presenti nell\'app — usali con PRIORITA quando pertinenti (copia il nome ESATTO):\n' + luoghiAppStr + '.\nPuoi integrare con altri luoghi REALI della zona non presenti nell\'elenco, marcandoli con "esterno": true.'
+  : 'Nell\'app NON ci sono ancora luoghi salvati per questa zona. Usa la tua conoscenza per proporre luoghi REALI ed esistenti di ' + (vals.zona || 'questa zona della Sicilia') + ' (monumenti, chiese, piazze, musei, natura, ristoranti tipici). Marca TUTTE queste tappe con "esterno": true. NON inventare luoghi inesistenti.'
+}
 Distribuisci le tappe nei giorni rispettando i VINCOLI GEOGRAFICI sopra (max 4 tappe/giorno, ogni giorno compatto e vicino). IMPORTANTE: ogni luogo deve comparire UNA SOLA VOLTA in tutto l'itinerario, NON ripetere mai lo stesso posto. Includi almeno 1 ristorante per giorno se possibile, vicino alle altre tappe dello stesso giorno.
 
 Rispondi SOLO con questo JSON (nessun testo fuori dal JSON):
