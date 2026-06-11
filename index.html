@@ -4756,8 +4756,14 @@ function switchTab(tab){
   else if(tab==='alloggi') renderAlloggi();
   else if(tab==='eventi') renderEventi();
   else if(tab==='itinerari') { renderItinerari(); itinAvviaGPSLive(); }
-  
-  updateMap();
+
+  // Nel tab itinerari mostra SOLO l'itinerario selezionato, non i marker dei luoghi
+  if (tab === 'itinerari') {
+    clearMapMarkers();
+    itinRenderViewer();
+  } else {
+    updateMap();
+  }
 }
 
 
@@ -5252,7 +5258,11 @@ function itinCambiaAttivo(name) {
   ITIN_ATTIVO = name;
   _itinTappaSelezionata = null;
   if (_itinMarkerSelezionato) { try{map.removeLayer(_itinMarkerSelezionato);}catch(e){} _itinMarkerSelezionato = null; }
-  _itinFiltroGiorno = '';
+  // Pulisci marker e linee dell'itinerario precedente dalla mappa
+  if (window._wzLines) window._wzLines.forEach(function(l){ try{map.removeLayer(l);}catch(e){} });
+  if (window._wzMarkers) window._wzMarkers.forEach(function(m){ try{map.removeLayer(m);}catch(e){} });
+  window._wzLines = []; window._wzMarkers = [];
+  _itinFiltroGiorni.clear();
   itinRenderViewer();
 }
 function itinApriGestione() {
@@ -5301,8 +5311,9 @@ function itinRenderViewer() {
   itinRenderGiorni(it);
   // Disegna percorso su mappa rispettando filtri attivi
   setTimeout(function() {
+    const _nf = _itinFiltroGiorni.size === 0;
     const tappeVis = it.tappe.filter(function(tp) {
-      if (_itinFiltroGiorno && (tp.giorno||1) != parseInt(_itinFiltroGiorno)) return false;
+      if (!_nf && !_itinFiltroGiorni.has(tp.giorno||1)) return false;
       if (_itinFiltroCerca && !tp.nome.toLowerCase().includes(_itinFiltroCerca)) return false;
       return true;
     });
@@ -5865,7 +5876,7 @@ function itinCalcolaBudget(it) {
 
 // ── Filtri itinerario: per giorno e per tappa ──
 
-let _itinFiltroGiorno = ''; // '' = tutti
+let _itinFiltroGiorni = new Set(); // vuoto = tutti i giorni
 let _itinFiltroCerca  = ''; // '' = nessun filtro
 
 function itinAggiornaSelectorGiorni(it) {
@@ -5875,28 +5886,28 @@ function itinAggiornaSelectorGiorni(it) {
   const prevVal = sel.value;
   sel.innerHTML = '<option value="">' + t('itin_filter_tutti_giorni') + '</option>'
     + giorni.map(g => '<option value="' + g + '"' + (prevVal==g?' selected':'') + '>' + t('itin_giorno') + ' ' + g + '</option>').join('');
-  _itinFiltroGiorno = sel.value;
+  if(sel.value) { _itinFiltroGiorni.clear(); _itinFiltroGiorni.add(parseInt(sel.value)); } else { _itinFiltroGiorni.clear(); }
 }
 
 function itinApplicaFiltro() {
   itinApplicaFiltroDOM(); return;
   const sel = document.getElementById('itin-filter-day'); // legacy
   const srch = document.getElementById('itin-search-tappa');
-  _itinFiltroGiorno = sel ? sel.value : '';
+  // legacy
   _itinFiltroCerca  = srch ? srch.value.trim().toLowerCase() : '';
 
   const it = itinGetAttivo(); if(!it) return;
 
   // Aggiorna mappa con le tappe filtrate
   const tappeVis = it.tappe.filter(tp => {
-    if (_itinFiltroGiorno && (tp.giorno||1) != parseInt(_itinFiltroGiorno)) return false;
+    if (_itinFiltroGiorni.size>0 && !_itinFiltroGiorni.has(tp.giorno||1)) return false;
     if (_itinFiltroCerca && !tp.nome.toLowerCase().includes(_itinFiltroCerca)) return false;
     return true;
   });
   itinDisegnaMappaTappe(tappeVis);
 
   // Mostra/nascondi giorni e card
-  if (!_itinFiltroGiorno && !_itinFiltroCerca) {
+  if (_itinFiltroGiorni.size===0 && !_itinFiltroCerca) {
     // Nessun filtro attivo — mostra tutto
     document.querySelectorAll('.itin-day-header, .itin-tappa-card').forEach(el => {
       el.style.display = '';
@@ -5908,7 +5919,7 @@ function itinApplicaFiltro() {
   // Filtra per giorno: nascondi gli header giorni non selezionati
   document.querySelectorAll('.itin-day-header').forEach(hdr => {
     const g = hdr.dataset.day;
-    const match = !_itinFiltroGiorno || g == _itinFiltroGiorno;
+    const match = _itinFiltroGiorni.size===0 || _itinFiltroGiorni.has(parseInt(g));
     hdr.style.display = match ? '' : 'none';
   });
 
@@ -5917,7 +5928,7 @@ function itinApplicaFiltro() {
     card.classList.remove('highlight-search');
     const nome = (card.querySelector('.itin-tappa-name')?.textContent || '').toLowerCase();
     const g = card.closest('[data-day-group]')?.dataset.dayGroup;
-    const dayMatch = !_itinFiltroGiorno || !g || g == _itinFiltroGiorno;
+    const dayMatch = _itinFiltroGiorni.size===0 || !g || _itinFiltroGiorni.has(parseInt(g));
     const srchMatch = !_itinFiltroCerca || nome.includes(_itinFiltroCerca);
 
     if (!dayMatch || !srchMatch) {
@@ -5930,7 +5941,7 @@ function itinApplicaFiltro() {
 }
 
 function itinResetFiltro() {
-  _itinFiltroGiorno = ''; _itinFiltroCerca = '';
+  _itinFiltroGiorni.clear(); _itinFiltroCerca = '';
   const sel = document.getElementById('itin-filter-day');
   const srch = document.getElementById('itin-search-tappa');
   if(sel) sel.value = '';
@@ -5943,8 +5954,13 @@ function itinResetFiltro() {
 }
 
 // Disegna sulla mappa solo le tappe filtrate
+let _itinMapGen = 0; // token generazione: invalida le callback OSRM obsolete
+
 function itinDisegnaMappaTappe(tappe) {
   if (typeof map === 'undefined' || !window.L) return;
+  // Incrementa il token: ogni ridisegno invalida le richieste OSRM ancora in corso
+  const mioGen = ++_itinMapGen;
+
   if (window._wzLines) window._wzLines.forEach(l => { try{map.removeLayer(l);}catch(e){} });
   if (window._wzMarkers) window._wzMarkers.forEach(m => { try{map.removeLayer(m);}catch(e){} });
   window._wzLines = []; window._wzMarkers = [];
@@ -5969,10 +5985,14 @@ function itinDisegnaMappaTappe(tappe) {
     window._wzLines.push(ph);
     (async function(idx,f,t2,placeholder){
       const rc = await fetchOSRMSegment(f,t2);
+      // Se nel frattempo la mappa e stata ridisegnata, scarta il risultato
+      if (mioGen !== _itinMapGen) { try{map.removeLayer(placeholder);}catch(e){} return; }
       if(rc&&rc.length>1){
         try{map.removeLayer(placeholder);}catch(e){}
         const lc=(wzRoutingMode==='walking')?'#2ecc71':'#e8a020';
-        window._wzLines[idx]=L.polyline(rc,{color:lc,weight:4,opacity:.85}).addTo(map);
+        const nuova = L.polyline(rc,{color:lc,weight:4,opacity:.85}).addTo(map);
+        if (window._wzLines[idx]) window._wzLines[idx]=nuova;
+        else window._wzLines.push(nuova);
       }
     })(i,coords[i],coords[i+1],ph);
   }
@@ -6033,21 +6053,23 @@ function itinAggiornaDayTabs(it) {
   const giorni = [...new Set(it.tappe.map(tp => tp.giorno||1))].sort((a,b)=>a-b);
   container.innerHTML = '';
 
-  // Tab "Tutti"
+  // Tab "Tutti" (deseleziona tutti i giorni = mostra tutto)
   const allTab = document.createElement('span');
-  allTab.className = 'itin-day-tab' + (_itinFiltroGiorno === '' ? ' active-day' : '');
+  allTab.className = 'itin-day-tab' + (_itinFiltroGiorni.size === 0 ? ' active-day' : '');
   allTab.textContent = t('itin_filter_tutti_giorni');
-  allTab.onclick = () => { _itinFiltroGiorno = ''; itinAggiornaDayTabs(it); itinApplicaFiltroDOM(); };
+  allTab.onclick = () => { _itinFiltroGiorni.clear(); itinAggiornaDayTabs(it); itinApplicaFiltroDOM(); };
   container.appendChild(allTab);
 
-  // Tab per ogni giorno
+  // Tab per ogni giorno — selezione multipla (toggle)
   giorni.forEach(g => {
     const tab = document.createElement('span');
-    tab.className = 'itin-day-tab' + (_itinFiltroGiorno == g ? ' active-day' : '');
+    tab.className = 'itin-day-tab' + (_itinFiltroGiorni.has(g) ? ' active-day' : '');
     const nTappe = it.tappe.filter(tp=>(tp.giorno||1)===g).length;
     tab.textContent = t('itin_giorno') + ' ' + g + ' (' + nTappe + ')';
     tab.onclick = (function(_g){ return function() {
-      _itinFiltroGiorno = String(_g);
+      // Toggle: se gia attivo lo rimuovo, altrimenti lo aggiungo
+      if (_itinFiltroGiorni.has(_g)) _itinFiltroGiorni.delete(_g);
+      else _itinFiltroGiorni.add(_g);
       itinAggiornaDayTabs(it);
       itinApplicaFiltroDOM();
     }; })(g);
@@ -6062,24 +6084,25 @@ function itinApplicaFiltroDOM() {
 
   const it = itinGetAttivo(); if (!it) return;
 
-  // Filtra tappe visibili
+  // Filtra tappe visibili (multi-giorno: vuoto = tutti)
+  const noFilter = _itinFiltroGiorni.size === 0;
   const tappeVis = it.tappe.filter(tp => {
-    if (_itinFiltroGiorno && (tp.giorno||1) != parseInt(_itinFiltroGiorno)) return false;
+    if (!noFilter && !_itinFiltroGiorni.has(tp.giorno||1)) return false;
     if (_itinFiltroCerca && !tp.nome.toLowerCase().includes(_itinFiltroCerca)) return false;
     return true;
   });
 
   // Mostra/nascondi header giorni
   document.querySelectorAll('.itin-day-header').forEach(hdr => {
-    const g = hdr.dataset.day;
-    hdr.style.display = (!_itinFiltroGiorno || g == _itinFiltroGiorno) ? '' : 'none';
+    const g = parseInt(hdr.dataset.day);
+    hdr.style.display = (noFilter || _itinFiltroGiorni.has(g)) ? '' : 'none';
   });
 
   // Mostra/nascondi card tappe con ricerca
   document.querySelectorAll('.itin-tappa-card').forEach(card => {
     const nome = (card.querySelector('.itin-tappa-name')?.textContent || '').toLowerCase();
-    const g = card.dataset.dayGroup;
-    const dayOk = !_itinFiltroGiorno || !g || g == _itinFiltroGiorno;
+    const g = parseInt(card.dataset.dayGroup);
+    const dayOk = noFilter || !g || _itinFiltroGiorni.has(g);
     const srchOk = !_itinFiltroCerca || nome.includes(_itinFiltroCerca);
     card.style.display = (dayOk && srchOk) ? '' : 'none';
     card.classList.toggle('highlight-search', !!(srchOk && _itinFiltroCerca));
@@ -7252,31 +7275,48 @@ function wzSetRoutingMode(mode) {
     btnWalk.classList.toggle('active-walk', mode === 'walking');
     btnWalk.classList.remove('active-drive');
   }
-  // Ridisegna il percorso con la nuova modalità
-  wzDisegnaMappa();
+  // Ridisegna con la nuova modalita nel contesto giusto:
+  // se il viewer dell'itinerario salvato e attivo, ridisegna le tappe filtrate;
+  // altrimenti (wizard in creazione) usa wzDisegnaMappa.
+  const viewer = document.getElementById('itin-viewer');
+  const viewerAttivo = viewer && viewer.style.display !== 'none' && itinGetAttivo();
+  if (viewerAttivo) {
+    const it = itinGetAttivo();
+    const noFilter = _itinFiltroGiorni.size === 0;
+    const tappeVis = it.tappe.filter(function(tp){
+      if (!noFilter && !_itinFiltroGiorni.has(tp.giorno||1)) return false;
+      if (_itinFiltroCerca && !tp.nome.toLowerCase().includes(_itinFiltroCerca)) return false;
+      return true;
+    });
+    itinDisegnaMappaTappe(tappeVis);
+  } else {
+    wzDisegnaMappa();
+  }
 }
 
 async function fetchOSRMSegment(from, to) {
-  try {
-    const profile = (wzRoutingMode === 'walking') ? 'foot' : 'driving';
-    const url = "https://router.project-osrm.org/route/v1/" + profile + "/"
-      + from[1] + "," + from[0] + ";" + to[1] + "," + to[0]
-      + "?overview=full&geometries=geojson";
-    let res;
+  const profile = (wzRoutingMode === 'walking') ? 'foot' : 'driving';
+  const coordStr = from[1] + "," + from[0] + ";" + to[1] + "," + to[0];
+  // Server OSRM in ordine di priorita (se uno fallisce, prova il successivo)
+  const servers = [
+    "https://router.project-osrm.org/route/v1/" + profile + "/",
+    "https://routing.openstreetmap.de/routed-" + (profile==='foot'?'foot':'car') + "/route/v1/" + (profile==='foot'?'foot':'driving') + "/"
+  ];
+  for (const base of servers) {
     try {
+      const url = base + coordStr + "?overview=full&geometries=geojson";
       const ctrl = new AbortController();
-      const tid = setTimeout(() => ctrl.abort(), 5000);
-      res = await fetch(url, { signal: ctrl.signal });
+      const tid = setTimeout(() => ctrl.abort(), 6000);
+      const res = await fetch(url, { signal: ctrl.signal });
       clearTimeout(tid);
-    } catch(e) { res = null; }
-    if (!res || !res.ok) throw new Error('OSRM non disponibile');
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    if (data.routes && data.routes[0]) {
-      // GeoJSON restituisce [lon,lat] — inverti in [lat,lon] per Leaflet
-      return data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
-    }
-  } catch(e) {}
+      if (!res || !res.ok) continue;
+      const data = await res.json();
+      if (data.routes && data.routes[0]) {
+        // GeoJSON restituisce [lon,lat] — inverti in [lat,lon] per Leaflet
+        return data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+      }
+    } catch(e) { /* prova il server successivo */ }
+  }
   return null; // fallback alla linea retta
 }
 
