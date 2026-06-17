@@ -3144,6 +3144,12 @@ const TRANSLATIONS = {
     itin_dist_giorno: 'Percorso del giorno',
     settings_model_label: 'Modello Gemini da usare per le funzioni AI:',
     settings_key_desc: 'Rimuovi la chiave Gemini se vuoi cambiarla o disattivare temporaneamente l\'AI.',
+    gmaps_link_breve_istruzioni: 'Link breve non supportato. Aprilo nel browser, attendi che la mappa si carichi, poi copia l\'URL COMPLETO dalla barra degli indirizzi e incollalo qui.',
+    gmaps_geocoding: 'Ricerca coordinate...',
+    gmaps_geocoding_fallito: 'Coordinate non trovate. Aggiungi un link Google Maps o controlla l\'indirizzo.',
+    gmaps_solo_coord: 'Solo coordinate: inserisci tu il nome del luogo.',
+    gmaps_ai_fallita_parziale: 'AI non disponibile: compilati i dati rilevati. Verifica e completa.',
+    storage_pieno: 'Memoria piena: libera spazio eliminando foto o note vocali.',
   },
   en: {
     // Login
@@ -3511,6 +3517,12 @@ const TRANSLATIONS = {
     itin_dist_giorno: 'Day route',
     settings_model_label: 'Gemini model for AI features:',
     settings_key_desc: 'Remove the Gemini key to change it or temporarily disable AI.',
+    gmaps_link_breve_istruzioni: 'Short link not supported. Open it in the browser, wait for the map to load, then copy the FULL URL from the address bar and paste it here.',
+    gmaps_geocoding: 'Searching coordinates...',
+    gmaps_geocoding_fallito: 'Coordinates not found. Add a Google Maps link or check the address.',
+    gmaps_solo_coord: 'Coordinates only: please enter the place name.',
+    gmaps_ai_fallita_parziale: 'AI unavailable: detected data filled in. Check and complete.',
+    storage_pieno: 'Storage full: free space by removing photos or voice notes.',
   }
 };
 
@@ -3580,7 +3592,7 @@ async function caricaDatiEsterni() {
   } catch(e) {
     console.warn('[Dati] Fallback (' + DATI_SICILIA.length + '):', e.message);
   }
-  processaDatiJSON(); avviaApp();
+  processaDatiJSON(); avviaApp(); caricaItinerariAsync();
 }
 
 // Elabora il JSON grezzo per instradare gli oggetti nei vari contenitori dell'app
@@ -3674,102 +3686,271 @@ const GMAPS_FIELDS = {
 // ═══════════════════════════════════════════════════════
 // IMPORT UNIFICATO (modello Modena): link, nome o testo → AI
 // ═══════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════
+// HELPER IMPORT GMAPS: DMS, coordinate nude, geocoding
+// ═══════════════════════════════════════════════════════
+const BBOX_SICILIA = '12.3,38.85,15.75,36.55'; // lon_min,lat_max,lon_max,lat_min
+
+// Converte coordinate DMS (es. 41°52'44.3"N 16°10'30.0"E) in decimali
+function dmsToDecimal(testo) {
+  const re = /(\d+)[\u00b0\s]+(\d+)['\u2032\s]+([\d.]+)["\u2033\s]*([NSEW])/gi;
+  const found = [];
+  let mm;
+  while ((mm = re.exec(testo)) !== null) {
+    let dec = parseInt(mm[1]) + parseInt(mm[2])/60 + parseFloat(mm[3])/3600;
+    const dir = mm[4].toUpperCase();
+    if (dir === 'S' || dir === 'W') dec = -dec;
+    found.push({ dec: dec, dir: dir });
+  }
+  // Serve una lat (N/S) e una lon (E/W)
+  const la = found.find(f => f.dir==='N' || f.dir==='S');
+  const lo = found.find(f => f.dir==='E' || f.dir==='W');
+  if (la && lo) return { lat: la.dec, lon: lo.dec };
+  return null;
+}
+
+// Estrae il CAP italiano (5 cifre) dal testo, se presente
+function trovaCAP(testo) {
+  const m = testo.match(/\b(\d{5})\b/);
+  return m ? m[1] : null;
+}
+
+// Rimuove il CAP da una stringa città (es. "90013 Castelbuono" -> "Castelbuono")
+function cittaSenzaCAP(s) {
+  if (!s) return '';
+  return s.replace(/\b\d{5}\b/g, '').replace(/\s*PA\b|\s*CT\b|\s*ME\b|\s*AG\b|\s*TP\b|\s*SR\b|\s*RG\b|\s*EN\b|\s*CL\b|\s*RC\b/gi,'').replace(/[,\-]+/g,' ').replace(/\s+/g,' ').trim();
+}
+
+// Geocoding diretto via Nominatim (limitato alla Sicilia)
+async function geocodeNominatim(query) {
+  try {
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&viewbox='
+      + BBOX_SICILIA + '&bounded=1&q=' + encodeURIComponent(query);
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 6000);
+    const res = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(tid);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data && data[0]) {
+      return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), display: data[0].display_name || '' };
+    }
+  } catch(e) {}
+  return null;
+}
+
+// Reverse geocoding: da coordinate ricava nome POI e città
+async function reverseNominatim(lat, lon) {
+  try {
+    const url = 'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat
+      + '&lon=' + lon + '&zoom=18&addressdetails=1';
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 6000);
+    const res = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(tid);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const a = data.address || {};
+    const nome = a.amenity || a.shop || a.tourism || a.building || a.leisure || '';
+    const citta = a.city || a.town || a.village || a.municipality || a.county || '';
+    return { nome: nome, citta: citta };
+  } catch(e) {}
+  return null;
+}
+
+
 async function importaDaGMapsAI(tipo) {
   const inp = document.getElementById('gmaps-input-' + tipo);
   const fb  = document.getElementById('gmaps-feedback-' + tipo);
   const fld = GMAPS_FIELDS[tipo];
   if (!inp || !fb || !fld) return;
 
-  const testo = inp.value.trim();
+  let testo = inp.value.trim();
   if (!testo) { fb.className='gmaps-feedback err'; fb.textContent = t('gmaps_inserisci_qualcosa'); return; }
+
+  // A. Link breve non gestibile: chiedi il link completo e interrompi
+  if (testo.includes('maps.app.goo.gl') || testo.includes('goo.gl/maps')) {
+    fb.className = 'gmaps-feedback err';
+    fb.innerHTML = '\u26a0\ufe0f ' + t('gmaps_link_breve_istruzioni');
+    return;
+  }
 
   fb.className = 'gmaps-feedback';
   fb.textContent = '\u29d7 ' + t('gmaps_analisi');
 
-  // STEP 1: prova a estrarre coordinate direttamente dal link (veloce, senza AI)
   let lat = null, lon = null, nome = '';
+  let cittaRilevata = '';
+  let indirizzo = '';
+  let soloCoordinate = false;
 
-  // !3d!4d = coordinate precise del pin
+  // B1. Coordinate da link (!3d!4d / @ / ?q= / ll=)
   let m = testo.match(/!3d(-?\d+\.?\d+).*?!4d(-?\d+\.?\d+)/);
   if (m) { lat = parseFloat(m[1]); lon = parseFloat(m[2]); }
   if (!lat) { m = testo.match(/@(-?\d+\.?\d+),(-?\d+\.?\d+)/); if (m){lat=parseFloat(m[1]);lon=parseFloat(m[2]);} }
   if (!lat) { m = testo.match(/[?&]q=(-?\d+\.?\d+),(-?\d+\.?\d+)/); if (m){lat=parseFloat(m[1]);lon=parseFloat(m[2]);} }
   if (!lat) { m = testo.match(/ll=(-?\d+\.?\d+),(-?\d+\.?\d+)/); if (m){lat=parseFloat(m[1]);lon=parseFloat(m[2]);} }
 
+  // B2. Formato DMS (41\u00b052'44.3"N 16\u00b010'30.0"E)
+  if (!lat) {
+    const dms = dmsToDecimal(testo);
+    if (dms) { lat = dms.lat; lon = dms.lon; }
+  }
+
+  // B3. Coordinate decimali "nude" nel testo (es. 41.882531, 16.177586)
+  const isLink = testo.includes('http') || testo.includes('maps');
+  if (!lat && !isLink) {
+    const mn = testo.match(/(-?\d{1,2}\.\d{4,})\s*,\s*(-?\d{1,3}\.\d{4,})/);
+    if (mn) {
+      lat = parseFloat(mn[1]); lon = parseFloat(mn[2]);
+      // Rimuovi la sottostringa coordinate dal testo per l'analisi nome/indirizzo
+      testo = testo.replace(mn[0], '').replace(/^[\s,]+|[\s,]+$/g,'').trim();
+    }
+  }
+
   // Nome dal path /place/Nome/
   const nm = testo.match(/\/place\/([^/@?!]+?)(?:\/|@|\?|!|$)/);
   if (nm) { nome = decodeURIComponent(nm[1].replace(/\+/g,' ')).replace(/_/g,' ').trim(); if(nome.indexOf(',')>0) nome=nome.split(',')[0].trim(); }
 
-  // Se il testo NON è un link, è il nome stesso
-  const isLink = testo.includes('http') || testo.includes('maps');
-  if (!isLink && !nome) nome = testo;
+  // C. Separazione nome / indirizzo / citta tramite CAP (solo se NON e un link)
+  if (!isLink && !nome) {
+    const cap = trovaCAP(testo);
+    if (cap) {
+      const seg = testo.split(',').map(s => s.trim()).filter(Boolean);
+      const kwStrada = /\b(via|viale|piazza|piazzale|strada|frazione|localit\u00e0|loc|contrada|c\.da|s\.s\.|s\.p\.|vico|largo|corso)\b/i;
+      let idxStrada = -1;
+      for (let i = 1; i < seg.length; i++) { if (kwStrada.test(seg[i])) { idxStrada = i; break; } }
+      if (idxStrada > 0) {
+        nome = seg.slice(0, idxStrada).join(', ').trim();
+        indirizzo = seg.slice(idxStrada).join(', ').trim();
+      } else {
+        // Trova il segmento col CAP
+        let idxCap = seg.findIndex(s => /\b\d{5}\b/.test(s));
+        if (idxCap === 1 && seg.length <= 2) {
+          // Un solo segmento prima del CAP => probabilmente solo una citta
+          cittaRilevata = cittaSenzaCAP(seg[idxCap]);
+          soloCoordinate = true;
+        } else if (idxCap > 0) {
+          nome = seg[0].trim();
+          indirizzo = seg.slice(1).join(', ').trim();
+        }
+      }
+      if (!cittaRilevata) {
+        const segCap = seg.find(s => /\b\d{5}\b/.test(s));
+        if (segCap) cittaRilevata = cittaSenzaCAP(segCap);
+      }
+    } else if (!nome) {
+      // Nessun CAP, nessun link: il testo e il nome stesso
+      nome = testo;
+    }
+  }
 
-  // STEP 2: chiama AI per descrizione, categoria, città (e coordinate se mancanti)
-  const haCoord = lat && lon;
+  // D. Geocoding diretto via Nominatim (prima dell'AI) se mancano coordinate
+  let geoFallito = false;
+  if (!lat) {
+    const q = indirizzo || testo;
+    const geo = await geocodeNominatim(q);
+    if (geo) { lat = geo.lat; lon = geo.lon; }
+    else geoFallito = true;
+  }
+
+  // E. Reverse geocoding: coordinate senza nome => identifica POI e citta
+  if (lat && lon && !nome && !soloCoordinate) {
+    const rev = await reverseNominatim(lat, lon);
+    if (rev) {
+      if (rev.nome) nome = rev.nome;
+      if (rev.citta && !cittaRilevata) cittaRilevata = rev.citta;
+    }
+  }
+
+  const haCoord = !!(lat && lon);
   const catList = tipo==='rist' ? 'ristorante,bar,caffe,gelateria'
                 : tipo==='alloggio' ? 'hotel,b&b,agriturismo,villa,camping'
                 : 'cultura,natura,mare,arte,artigianato,religioso,borgo,altro';
 
-  let prompt = 'Analizza questo luogo turistico in Sicilia: "' + (nome||testo) + '"';
+  // E2. Prompt AI (non bloccante)
+  let prompt = 'Analizza questo luogo turistico in Sicilia: "' + (nome||indirizzo||testo) + '"';
   if (haCoord) prompt += ' (coordinate ' + lat + ', ' + lon + ')';
+  if (cittaRilevata) prompt += ' nel comune di ' + cittaRilevata;
   prompt += '.\nFornisci: 1) nome pulito del luogo, 2) descrizione turistica breve (max 50 parole), 3) categoria tra: ' + catList + ', 4) comune/citta';
   if (!haCoord) prompt += ', 5) latitudine e longitudine GPS';
+  if (soloCoordinate) prompt += '.\nATTENZIONE: il testo NON contiene il nome di un\'attivita: lascia "nome" e "categoria" VUOTI, NON inventare un nome basandoti sulla via o sulla posizione';
   prompt += '.\nRispondi SOLO con JSON: {"nome":"...","descrizione":"...","categoria":"...","citta":"..."' + (haCoord?'':',"lat":0.0,"lon":0.0') + '}';
 
+  // Funzione di compilazione campi (riusata sia su successo che su fallback)
+  function compila(rawNome, rawDesc, rawCat, rawCitta) {
+    if (lat && lon) {
+      const le=document.getElementById(fld.lat); if(le) le.value=lat.toFixed(6);
+      const ge=document.getElementById(fld.lng); if(ge) ge.value=lon.toFixed(6);
+    }
+    // Nome: se soloCoordinate lascia vuoto
+    const ne=document.getElementById(fld.nome);
+    if (ne && !soloCoordinate) ne.value = rawNome || nome || '';
+    // Descrizione
+    const de=document.getElementById(fld.desc);
+    if (de && rawDesc) de.value = rawDesc;
+    // Citta: priorita al valore calcolato da codice (senza CAP)
+    if (fld.citta) {
+      const ce=document.getElementById(fld.citta);
+      const cittaFinale = cittaRilevata || cittaSenzaCAP(rawCitta||'');
+      if (ce && cittaFinale) ce.value = cittaFinale;
+    }
+    // Categoria
+    if (rawCat && fld.cat) {
+      const ce=document.getElementById(fld.cat);
+      if (ce) { const opts=Array.from(ce.options).map(o=>o.value); const cat=opts.find(o=>o.toLowerCase().includes(rawCat.toLowerCase())||rawCat.toLowerCase().includes(o)); if(cat) ce.value=cat; }
+    }
+    // Mappa
+    if (lat && lon && typeof map!=='undefined' && window.L){
+      map.flyTo([lat,lon],14,{duration:1});
+      if(window._cercaNomeMarker){try{map.removeLayer(window._cercaNomeMarker);}catch(e){}}
+      window._cercaNomeMarker=L.marker([lat,lon]).addTo(map).bindPopup('\u2705 '+(rawNome||nome||t('gmaps_ok'))).openPopup();
+    }
+  }
+
   try {
-    const payload = { contents:[{parts:[{text:prompt}]}], systemInstruction:{parts:[{text:'Solo JSON valido. Sei un esperto di luoghi turistici siciliani.'}]} };
+    const payload = { contents:[{parts:[{text:prompt}]}], systemInstruction:{parts:[{text:'Solo JSON valido. Sei un esperto di luoghi turistici siciliani. Non inventare nomi inesistenti.'}]} };
     const raw = await fetchGeminiWithRetry(payload, true, false, 0, false);
 
-    if (raw && (raw.nome || raw.descrizione)) {
-      // Coordinate
+    if (raw && (raw.nome || raw.descrizione || raw.lat)) {
       if (!haCoord && raw.lat && raw.lon) { lat = parseFloat(raw.lat); lon = parseFloat(raw.lon); }
-      if (lat && lon) {
-        const le=document.getElementById(fld.lat); if(le) le.value=lat.toFixed(6);
-        const ge=document.getElementById(fld.lng); if(ge) ge.value=lon.toFixed(6);
-      }
-      // Nome
-      const ne=document.getElementById(fld.nome);
-      if(ne) ne.value = raw.nome || nome || testo;
-      // Descrizione
-      const de=document.getElementById(fld.desc);
-      if(de && raw.descrizione) de.value = raw.descrizione;
-      // Città
-      if(raw.citta && fld.citta){ const ce=document.getElementById(fld.citta); if(ce) ce.value=raw.citta; }
-      // Categoria
-      if(raw.categoria && fld.cat){ const ce=document.getElementById(fld.cat); if(ce){ const opts=Array.from(ce.options).map(o=>o.value); const cat=opts.find(o=>o.toLowerCase().includes(raw.categoria.toLowerCase())||raw.categoria.toLowerCase().includes(o)); if(cat) ce.value=cat; } }
-      // Mappa
-      if(lat && lon && typeof map!=='undefined' && window.L){
-        map.flyTo([lat,lon],14,{duration:1});
-        if(window._cercaNomeMarker){try{map.removeLayer(window._cercaNomeMarker);}catch(e){}}
-        window._cercaNomeMarker=L.marker([lat,lon]).addTo(map).bindPopup('\u2705 '+(raw.nome||nome)).openPopup();
-      }
+      compila(raw.nome, raw.descrizione, raw.categoria, raw.citta);
       const stimaCoord = !haCoord && raw.lat;
-      fb.textContent = '\u2705 ' + t('gmaps_ok')
-        + (raw.citta?' ('+raw.citta+')':'')
-        + (stimaCoord ? ' \u2014 \u26a0\ufe0f '+t('gmaps_verifica_coord') : '');
+      let msg = '\u2705 ';
+      if (lat && lon) msg += lat.toFixed(5)+', '+lon.toFixed(5);
+      const cf = cittaRilevata || cittaSenzaCAP(raw.citta||'');
+      if (cf) msg += ' ('+cf+')';
+      if (soloCoordinate) msg += ' \u2014 \u26a0\ufe0f '+t('gmaps_solo_coord');
+      else if (stimaCoord) msg += ' \u2014 \u26a0\ufe0f '+t('gmaps_verifica_coord');
+      else msg += ' \u2014 \u26a0\ufe0f '+t('gmaps_aggiorna_cat');
+      fb.textContent = msg;
     } else {
-      // Fallback: se l'AI non risponde ma ho almeno le coordinate dal link
-      if (haCoord) {
-        const le=document.getElementById(fld.lat); if(le) le.value=lat.toFixed(6);
-        const ge=document.getElementById(fld.lng); if(ge) ge.value=lon.toFixed(6);
-        if(nome){ const ne=document.getElementById(fld.nome); if(ne) ne.value=nome; }
-        fb.textContent = '\u2705 ' + lat.toFixed(5)+', '+lon.toFixed(5) + (nome?' \u00b7 '+nome:'') + ' \u2014 \u26a0\ufe0f '+t('gmaps_aggiorna_cat');
+      // AI vuota: usa quanto rilevato se disponibile
+      if (haCoord || nome || cittaRilevata) {
+        compila('', '', '', '');
+        fb.textContent = '\u2705 ' + (lat&&lon ? lat.toFixed(5)+', '+lon.toFixed(5) : '')
+          + (cittaRilevata?' ('+cittaRilevata+')':'') + ' \u2014 \u26a0\ufe0f '+t('gmaps_aggiorna_cat');
       } else {
         fb.className='gmaps-feedback err'; fb.textContent=t('err_ai');
       }
     }
   } catch(e) {
-    // Se AI fallisce ma ho coordinate dal link, usa quelle
-    if (haCoord) {
-      const le=document.getElementById(fld.lat); if(le) le.value=lat.toFixed(6);
-      const ge=document.getElementById(fld.lng); if(ge) ge.value=lon.toFixed(6);
-      if(nome){ const ne=document.getElementById(fld.nome); if(ne) ne.value=nome; }
-      fb.textContent = '\u2705 ' + lat.toFixed(5)+', '+lon.toFixed(5) + (nome?' \u00b7 '+nome:'') + ' \u2014 \u26a0\ufe0f '+t('gmaps_aggiorna_cat');
+    // F. AI fallita: usa comunque coordinate/nome/citta da regex+geocoding
+    if (haCoord || nome || cittaRilevata) {
+      compila('', '', '', '');
+      let msg = '\u2705 ';
+      if (lat && lon) msg += lat.toFixed(5)+', '+lon.toFixed(5);
+      if (cittaRilevata) msg += ' ('+cittaRilevata+')';
+      msg += ' \u2014 \u26a0\ufe0f ' + t('gmaps_ai_fallita_parziale');
+      fb.textContent = msg;
+    } else if (geoFallito) {
+      fb.className='gmaps-feedback err'; fb.textContent=t('gmaps_geocoding_fallito');
     } else {
       fb.className='gmaps-feedback err'; fb.textContent=t('err_ai');
     }
   }
 }
+
 
 function parseGMapsLink(tipo) {
   const inp = document.getElementById('gmaps-input-' + tipo);
@@ -4095,6 +4276,54 @@ let SENTIERI_CUSTOM = [];
 let SENTIERI_NASCOSTI = [];
 let RISTORANTI_CUSTOM = [];
 let RISTORANTI_NASCOSTI = new Set();
+// ═══════════════════════════════════════════════════════
+// STORAGE ITINERARI: IndexedDB (con fallback localStorage)
+// ═══════════════════════════════════════════════════════
+const IDB_NAME = 'sicilia_db';
+const IDB_STORE = 'itinerari';
+let _idbAvailable = (typeof indexedDB !== 'undefined');
+
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    if (!_idbAvailable) { reject(new Error('IndexedDB non disponibile')); return; }
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = function(e) {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE, { keyPath: 'key' });
+      }
+    };
+    req.onsuccess = function(e) { resolve(e.target.result); };
+    req.onerror = function(e) { reject(e.target.error); };
+  });
+}
+
+// Salva l'array itinerari in IndexedDB
+async function idbSalvaItinerari(arr, ts) {
+  try {
+    const db = await idbOpen();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put({ key: 'itinerari', data: arr, ts: ts || Date.now() });
+      tx.oncomplete = function(){ resolve(true); };
+      tx.onerror = function(e){ reject(e.target.error); };
+    });
+  } catch(e) { return false; }
+}
+
+// Legge l'array itinerari da IndexedDB (null se assente/errore)
+async function idbLeggiItinerari() {
+  try {
+    const db = await idbOpen();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get('itinerari');
+      req.onsuccess = function(){ resolve(req.result || null); }; // record completo {data, ts}
+      req.onerror = function(e){ reject(e.target.error); };
+    });
+  } catch(e) { return null; }
+}
+
 let ITINERARI_CUSTOM = [];
 let ITIN_ATTIVO = null;
 let wzRoutingMode = 'driving';
@@ -4115,21 +4344,9 @@ function caricaDatiLocali() {
       ALLOGGI_CONSIGLIATI = savedAlloggi;
   }
 
-  const rawItin = JSON.parse(localStorage.getItem('sicilia_itin') || '[]');
-  ITINERARI_CUSTOM = rawItin.map(it => {
-    if (it.tappe && typeof it.tappe[0] === 'string') {
-      return { ...it, tappe: it.tappe.map((nome, i) => ({
-        nome, giorno: 1, orario: '', nota: '', esterno: false,
-        coords: (it.coords && it.coords[i]) ? it.coords[i] : null,
-        voiceNote: undefined,
-        costo: '', paid: false, link: '', foto: ''
-      }))};
-    }
-    // Assicura campi nuovi anche su tappe esistenti
-    return { ...it, tappe: (it.tappe||[]).map(tp => ({
-      costo:'', paid:false, link:'', foto:'', ...tp
-    }))};
-  });
+  // Gli itinerari sono caricati in modo asincrono da IndexedDB (vedi caricaItinerariAsync)
+  // Qui inizializziamo dal backup leggero localStorage per avere subito qualcosa a schermo.
+  ITINERARI_CUSTOM = normalizzaItinerari(JSON.parse(localStorage.getItem('sicilia_itin') || '[]'));
   ITINERARI_NASCOSTI  = JSON.parse(localStorage.getItem('sicilia_itin_nascosti') || '[]');
   VALUTAZIONI         = JSON.parse(localStorage.getItem('sicilia_valutazioni') || '{}');
   CHECKINS            = JSON.parse(localStorage.getItem('sicilia_checkins') || '[]');
@@ -5280,8 +5497,109 @@ function renderEventi() {
 
 // ITINERARI v2 — SISTEMA PER GIORNATA
 function itinSalva() {
-  localStorage.setItem('sicilia_itin', JSON.stringify(ITINERARI_CUSTOM));
+  const ts = Date.now();
+  // Primario: IndexedDB (gestisce foto e note vocali pesanti)
+  if (_idbAvailable) {
+    idbSalvaItinerari(ITINERARI_CUSTOM, ts);
+    // Ridondanza leggera in localStorage: SENZA foto/audio (per non saturare i 5MB)
+    try {
+      const leggero = ITINERARI_CUSTOM.map(function(it){
+        return Object.assign({}, it, {
+          tappe: (it.tappe||[]).map(function(tp){
+            const t2 = Object.assign({}, tp);
+            delete t2.foto; delete t2.voiceNote;
+            return t2;
+          })
+        });
+      });
+      localStorage.setItem('sicilia_itin', JSON.stringify(leggero));
+      localStorage.setItem('sicilia_itin_ts', String(ts));
+    } catch(e) { /* localStorage pieno: ignora, IndexedDB ha la copia completa */ }
+  } else {
+    // Fallback: solo localStorage (con foto/audio, a rischio saturazione)
+    try { localStorage.setItem('sicilia_itin', JSON.stringify(ITINERARI_CUSTOM)); }
+    catch(e) { showToast('\u26a0\ufe0f ' + t('storage_pieno')); }
+  }
 }
+// Normalizza la struttura delle tappe (campi nuovi, formato vecchio stringhe)
+function normalizzaItinerari(rawItin) {
+  return (rawItin || []).map(function(it) {
+    if (it.tappe && typeof it.tappe[0] === 'string') {
+      return Object.assign({}, it, { tappe: it.tappe.map(function(nome, i) {
+        return { nome: nome, giorno: 1, orario: '', nota: '', esterno: false,
+          coords: (it.coords && it.coords[i]) ? it.coords[i] : null,
+          voiceNote: undefined, costo: '', paid: false, link: '', foto: '' };
+      })});
+    }
+    return Object.assign({}, it, { tappe: (it.tappe||[]).map(function(tp) {
+      return Object.assign({ costo:'', paid:false, link:'', foto:'' }, tp);
+    })});
+  });
+}
+
+// Caricamento asincrono da IndexedDB + migrazione automatica da localStorage
+async function caricaItinerariAsync() {
+  if (!_idbAvailable) return; // gia caricato da localStorage in caricaDatiLocali
+  try {
+    const rec = await idbLeggiItinerari(); // {data, ts} oppure null
+    const idbData = rec && rec.data ? rec.data : null;
+    const idbTs = rec && rec.ts ? rec.ts : 0;
+    const lsTs = parseInt(localStorage.getItem('sicilia_itin_ts') || '0', 10);
+
+    if (idbData && idbData.length > 0) {
+      // Caso normale: IndexedDB ha i dati completi (con foto/audio)
+      // ECCEZIONE: se localStorage e PIU RECENTE (modifica salvata e reload immediato
+      // prima che la scrittura IDB completasse), usa localStorage e ri-sincronizza IDB.
+      if (lsTs > idbTs) {
+        const raw = JSON.parse(localStorage.getItem('sicilia_itin') || '[]');
+        if (raw.length > 0) {
+          // Conserva foto/audio da IDB dove i nomi tappa combaciano (la copia LS e leggera)
+          ITINERARI_CUSTOM = normalizzaItinerari(_mergeMediaDaIDB(raw, idbData));
+          await idbSalvaItinerari(ITINERARI_CUSTOM, lsTs);
+        } else {
+          ITINERARI_CUSTOM = normalizzaItinerari(idbData);
+        }
+      } else {
+        ITINERARI_CUSTOM = normalizzaItinerari(idbData);
+      }
+    } else {
+      // IndexedDB vuoto: migra i dati esistenti da localStorage (prima volta)
+      const raw = JSON.parse(localStorage.getItem('sicilia_itin') || '[]');
+      if (raw.length > 0) {
+        ITINERARI_CUSTOM = normalizzaItinerari(raw);
+        await idbSalvaItinerari(ITINERARI_CUSTOM, lsTs || Date.now());
+      }
+    }
+    // Aggiorna le viste ora che abbiamo i dati completi
+    if (typeof renderItinerari === 'function') renderItinerari();
+    if (typeof itinRenderViewer === 'function' && ITIN_ATTIVO) itinRenderViewer();
+  } catch(e) { /* resta valido quanto caricato da localStorage */ }
+}
+
+// Reintegra foto/note vocali dai dati IDB (completi) nei dati localStorage (leggeri)
+// abbinando per nome itinerario + indice/nome tappa.
+function _mergeMediaDaIDB(leggeri, completi) {
+  if (!completi) return leggeri;
+  const mapC = {};
+  completi.forEach(function(it){ mapC[it.name] = it; });
+  return leggeri.map(function(it){
+    const src = mapC[it.name];
+    if (!src) return it;
+    const tappeSrc = src.tappe || [];
+    return Object.assign({}, it, { tappe: (it.tappe||[]).map(function(tp, i){
+      const ts = tappeSrc[i] && tappeSrc[i].nome === tp.nome ? tappeSrc[i]
+               : tappeSrc.find(function(x){ return x.nome === tp.nome; });
+      if (ts) {
+        const out = Object.assign({}, tp);
+        if (ts.foto && !tp.foto) out.foto = ts.foto;
+        if (ts.voiceNote && !tp.voiceNote) out.voiceNote = ts.voiceNote;
+        return out;
+      }
+      return tp;
+    })});
+  });
+}
+
 function itinGetAttivo() {
   if (!ITIN_ATTIVO && ITINERARI_CUSTOM.length > 0) ITIN_ATTIVO = ITINERARI_CUSTOM[0].name;
   return ITINERARI_CUSTOM.find(it => it.name === ITIN_ATTIVO) || null;
