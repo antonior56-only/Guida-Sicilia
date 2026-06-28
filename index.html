@@ -3150,6 +3150,12 @@ const TRANSLATIONS = {
     gmaps_solo_coord: 'Solo coordinate: inserisci tu il nome del luogo.',
     gmaps_ai_fallita_parziale: 'AI non disponibile: compilati i dati rilevati. Verifica e completa.',
     storage_pieno: 'Memoria piena: libera spazio eliminando foto o note vocali.',
+    reset_conferma_titolo: 'Conferma Reset',
+    reset_conferma_testo: 'Sei sicuro di voler eliminare tutti i tuoi dati, check-in e itinerari? L\'operazione e irreversibile.',
+    reset_conferma_ok: 'Si, cancella tutto',
+    reset_ok: 'Dati resettati. L\'app si riavviera...',
+    vision_analisi: 'Analizzo la foto...',
+    vision_fallita: 'Non sono riuscito ad analizzare la foto. Riprova.',
   },
   en: {
     // Login
@@ -3523,6 +3529,12 @@ const TRANSLATIONS = {
     gmaps_solo_coord: 'Coordinates only: please enter the place name.',
     gmaps_ai_fallita_parziale: 'AI unavailable: detected data filled in. Check and complete.',
     storage_pieno: 'Storage full: free space by removing photos or voice notes.',
+    reset_conferma_titolo: 'Confirm Reset',
+    reset_conferma_testo: 'Are you sure you want to delete all your data, check-ins and itineraries? This cannot be undone.',
+    reset_conferma_ok: 'Yes, delete everything',
+    reset_ok: 'Data reset. The app will restart...',
+    vision_analisi: 'Analyzing the photo...',
+    vision_fallita: 'Could not analyze the photo. Try again.',
   }
 };
 
@@ -4257,15 +4269,41 @@ function caricaModelloAISelector() {
 }
 
 function cancellaTuttiIDati() {
-  if(confirm("ATTENZIONE! Sei sicuro di voler eliminare tutti i tuoi dati, check-in e itinerari? L'operazione è irreversibile.")) {
-    Object.keys(localStorage).forEach(key => {
-      if (key.startsWith('sicilia_')) {
-        localStorage.removeItem(key);
-      }
+  closeModal('settings-modal');
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.style.zIndex = '10005';
+  overlay.innerHTML =
+    '<div class="modal-box" style="max-width:380px">'
+    + '<h2 style="color:var(--rust);font-size:18px;margin-bottom:10px">\u26a0\ufe0f ' + t('reset_conferma_titolo') + '</h2>'
+    + '<p style="font-size:13px;color:#666;margin-bottom:18px">' + t('reset_conferma_testo') + '</p>'
+    + '<div style="display:flex;gap:10px;justify-content:flex-end">'
+    + '<button class="btn btn-outline" id="btn-annulla-reset">' + t('pin_btn_annulla') + '</button>'
+    + '<button class="btn" style="background:#c62828;color:#fff" id="btn-conferma-reset">' + t('reset_conferma_ok') + '</button>'
+    + '</div></div>';
+  document.body.appendChild(overlay);
+  document.getElementById('btn-annulla-reset').onclick = function(){ document.body.removeChild(overlay); };
+  document.getElementById('btn-conferma-reset').onclick = async function(){
+    // 1. localStorage con prefisso sicilia_
+    Object.keys(localStorage).forEach(function(key){
+      if (key.startsWith('sicilia_')) localStorage.removeItem(key);
     });
-    alert("Dati resettati con successo. L'app verrà ricaricata.");
-    location.reload();
-  }
+    // 2. IndexedDB (itinerari con foto/note vocali)
+    try {
+      if (_idbAvailable) {
+        const db = await idbOpen();
+        await new Promise(function(resolve){
+          const tx = db.transaction(IDB_STORE, 'readwrite');
+          tx.objectStore(IDB_STORE).clear();
+          tx.oncomplete = function(){ resolve(); };
+          tx.onerror = function(){ resolve(); };
+        });
+      }
+    } catch(e) {}
+    document.body.removeChild(overlay);
+    showToast(t('reset_ok'));
+    setTimeout(function(){ location.reload(); }, 1800);
+  };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -4339,9 +4377,10 @@ function caricaDatiLocali() {
   RISTORANTI_CUSTOM   = JSON.parse(localStorage.getItem('sicilia_ristoranti_custom') || '[]');
   RISTORANTI_NASCOSTI = new Set(JSON.parse(localStorage.getItem('sicilia_ristoranti_nascosti') || '[]'));
   
-  const savedAlloggi = JSON.parse(localStorage.getItem('sicilia_alloggi_consigliati'));
-  if (savedAlloggi && savedAlloggi.length > 0) {
-      ALLOGGI_CONSIGLIATI = savedAlloggi;
+  const rawAlloggi = localStorage.getItem('sicilia_alloggi_consigliati');
+  if (rawAlloggi !== null) {
+      // L'utente ha gia personalizzato la lista (anche se vuota): rispetta le sue eliminazioni
+      try { ALLOGGI_CONSIGLIATI = JSON.parse(rawAlloggi); } catch(e) {}
   }
 
   // Gli itinerari sono caricati in modo asincrono da IndexedDB (vedi caricaItinerariAsync)
@@ -6076,7 +6115,7 @@ async function itinMeteoAI() {
       const forecastText=wBox&&wBox.textContent?wBox.textContent.slice(0,200):"meteo non disponibile";
       const places=it.tappe.map(tp=>tp.nome).join(", ");
       const prompt="Analizza questo itinerario in Sicilia ["+places+"] con queste previsioni meteo: "+forecastText+". Dai un consiglio breve (max 60 parole) su come adattare il piano.";
-      const payload={contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:150}};
+      const payload={contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens: 600, thinkingConfig: { thinkingBudget: 0 }}};
       const raw=await fetchGeminiWithRetry(payload,false,false,0,false);
       if(raw){ const _ai_msg = String(raw).slice(0,400); showToast("🌤 " + _ai_msg.slice(0,60)); }
     } catch(e){showToast(t("err_ai"));}
@@ -6202,7 +6241,7 @@ function itinAggiornaPaid(name, idx, val) {
 async function itinDettagliAI(nome) {
   showToast('🤖 ' + t('ai_generazione'));
   try {
-    const payload={contents:[{parts:[{text:'Descrivi brevemente "'+nome+'" in Sicilia: storia, orari tipici, consiglio utile. Max 80 parole.'}]},],generationConfig:{maxOutputTokens:200}};
+    const payload={contents:[{parts:[{text:'Descrivi brevemente "'+nome+'" in Sicilia: storia, orari tipici, consiglio utile. Max 80 parole.'}]},],generationConfig:{maxOutputTokens: 800, thinkingConfig: { thinkingBudget: 0 }}};
     const raw=await fetchGeminiWithRetry(payload,false,false,0,false);
     if(raw) showToast('ℹ️ '+String(raw).slice(0,80));
   } catch(e){showToast(t('err_ai'));}
@@ -6212,7 +6251,7 @@ async function itinAlternativaAI(name, idx) {
   const tp=it.tappe[idx]; if(!tp) return;
   showToast('🔄 ' + t('ai_generazione'));
   try {
-    const payload={contents:[{parts:[{text:'Suggerisci UN luogo alternativo a "'+tp.nome+'" in Sicilia. Solo nome e 1 frase.'}]},],generationConfig:{maxOutputTokens:80}};
+    const payload={contents:[{parts:[{text:'Suggerisci UN luogo alternativo a "'+tp.nome+'" in Sicilia. Solo nome e 1 frase.'}]},],generationConfig:{maxOutputTokens: 500, thinkingConfig: { thinkingBudget: 0 }}};
     const raw=await fetchGeminiWithRetry(payload,false,false,0,false);
     if(raw) showToast('🔄 '+String(raw).slice(0,80));
   } catch(e){showToast(t('err_ai'));}
@@ -6511,7 +6550,7 @@ async function generaGuidaAI(mode) {
   try {
     const lang = currentLang === 'en' ? 'English' : 'italiano';
     const prompt = 'Sei una guida turistica esperta della Sicilia. Scrivi un racconto evocativo e appassionante sul luogo "' + nome + '". Includi storia, curiosità, atmosfera e consigli pratici. Testo pulito, nessuna formattazione. Max 120 parole. Lingua: ' + lang + '.';
-    const payload = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 250 } };
+    const payload = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 1000, thinkingConfig: { thinkingBudget: 0 } } };
     const raw = await fetchGeminiWithRetry(payload, false, false, 0, false);
     const testo = typeof raw === 'string' ? raw : JSON.stringify(raw);
     _guidaAICache[nome] = testo;
@@ -7234,6 +7273,57 @@ async function getModelloAI(activeKey) {
 }
 
 
+// Analizza una foto con Gemini Vision per identificare un luogo siciliano
+async function analizzaFotoAI(event) {
+  const file = event && event.target && event.target.files ? event.target.files[0] : null;
+  if (!file) return;
+  // Reset input per permettere di ricaricare la stessa foto
+  event.target.value = '';
+
+  showToast('\uD83D\uDD0D ' + t('vision_analisi'));
+  try {
+    const base64 = await new Promise(function(resolve, reject){
+      const r = new FileReader();
+      r.onload = function(){ resolve(String(r.result).split(',')[1]); };
+      r.onerror = function(){ reject(new Error('read')); };
+      r.readAsDataURL(file);
+    });
+    const mime = file.type || 'image/jpeg';
+    const prompt = 'Osserva questa foto scattata in Sicilia. Identifica il luogo o monumento se riconoscibile, '
+      + 'e fornisci una breve descrizione turistica. Rispondi SOLO con JSON: '
+      + '{"luogo":"nome del luogo o \'non identificabile\'","citta":"comune se deducibile","descrizione":"max 60 parole","categoria":"cultura|natura|mare|arte|religioso|altro"}';
+    const payload = { contents:[{ parts:[
+      { inline_data: { mime_type: mime, data: base64 } },
+      { text: prompt }
+    ]}], systemInstruction:{ parts:[{ text:'Sei un esperto di luoghi turistici siciliani. Non inventare: se non riconosci il luogo, indicalo.' }]} };
+
+    const raw = await fetchGeminiWithRetry(payload, true, true, 0, false);
+    if (raw && raw.luogo) {
+      const titolo = raw.luogo;
+      const sub = [raw.citta, raw.categoria].filter(Boolean).join(' \u00b7 ');
+      const desc = raw.descrizione || '';
+      // Mostra il risultato in una modale leggera
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay open';
+      overlay.style.zIndex = '10005';
+      overlay.innerHTML =
+        '<div class="modal-box" style="max-width:420px">'
+        + '<h2 style="font-size:18px;color:var(--rust);margin-bottom:4px">\uD83D\uDCF8 ' + escapeHtmlItin(titolo) + '</h2>'
+        + (sub ? '<p style="font-size:12px;color:var(--sage);font-weight:600;margin-bottom:10px">' + escapeHtmlItin(sub) + '</p>' : '')
+        + '<p style="font-size:13px;color:#555;line-height:1.5;margin-bottom:18px">' + escapeHtmlItin(desc) + '</p>'
+        + '<div style="display:flex;justify-content:flex-end"><button class="btn" id="btn-vision-close">' + t('passport_close') + '</button></div>'
+        + '</div>';
+      document.body.appendChild(overlay);
+      document.getElementById('btn-vision-close').onclick = function(){ document.body.removeChild(overlay); };
+    } else {
+      showToast('\u26a0\ufe0f ' + t('vision_fallita'));
+    }
+  } catch(e) {
+    showToast('\u26a0\ufe0f ' + t('vision_fallita'));
+  }
+}
+
+
 async function fetchGeminiWithRetry(payload, isJson = false, isVision = false, retryCount = 0, jsonSchema = null) {
   const MAX_RETRIES = 2;
   let activeKey = localStorage.getItem('sicilia_gemini_key') || apiKey;
@@ -7851,88 +7941,6 @@ function wzReset() {
   document.getElementById('wz-zona').value = '';
   document.getElementById('wz-giorni').value = 3;
   document.getElementById('wz-giorni-val').textContent = '3';
-}
-
-async function generaItinerarioAI() {
-  const promptEl = document.getElementById('itin-ai-prompt');
-  const input = promptEl.value.trim();
-  if (!input) { showToast("Scrivi cosa vorresti fare nell'itinerario!"); return; }
-  
-  const btn = document.getElementById('btn-itin-ai');
-  btn.innerHTML = `<span class="spinner" style="border-top-color:#fff"></span> ${t('ai_generazione')}`;
-  btn.disabled = true;
-
-  const payload = {
-    contents: [{ parts: [{ text: input }] }],
-    systemInstruction: { parts: [{ text: `Sei un travel planner per la Sicilia. Crea un itinerario scegliendo le tappe ESATTAMENTE dall'elenco fornito, copiando il nome identico: ${getAppDati()}` }] }
-  };
-
-  try {
-    const itinData = await fetchGeminiWithRetry(payload, true);
-    const tappeValide = []; const coordsValide = [];
-    const allPlaces = [...LUOGHI, ...RISTORANTI, ...SENTIERI];
-    
-    itinData.tappe.forEach(tNome => {
-      const tLower = (tNome || '').toLowerCase().trim();
-      let match = allPlaces.find(p => p.name.toLowerCase().trim() === tLower) || allPlaces.find(p => p.name.toLowerCase().includes(tLower) || tLower.includes(p.name.toLowerCase()));
-      if (match && match.coords && !tappeValide.includes(match.name)) {
-        tappeValide.push(match.name);
-        coordsValide.push(Array.isArray(match.coords[0]) ? match.coords[0] : match.coords);
-      }
-    });
-
-    if (tappeValide.length === 0) throw new Error("Nessuna tappa valida trovata");
-
-    const nuovoItin = {
-      name: "✨ " + itinData.name, desc: itinData.desc, giorni: itinData.giorni || 1, km: itinData.km || 0,
-      tappe: tappeValide, coords: coordsValide, custom: true
-    };
-
-    ITINERARI_CUSTOM.unshift(nuovoItin);
-    localStorage.setItem('sicilia_itin', JSON.stringify(ITINERARI_CUSTOM));
-    renderItinerari();
-    loadItinRouteByName(nuovoItin.name, true);
-    document.getElementById('chat-panel').classList.remove('open');
-    promptEl.value = '';
-    showToast("Itinerario AI creato con successo!");
-  } catch (e) {
-    showToast(t('err_creazione'));
-  } finally {
-    btn.innerHTML = t('btn_crea_itin'); btn.disabled = false;
-  }
-}
-
-function analizzaFotoAI(event) {
-  const file = event.target.files[0]; if (!file) return;
-  showToast("⏳ Analisi foto in corso...");
-  document.getElementById('chat-widget').style.display = 'flex';
-  document.getElementById('chat-panel').classList.add('open');
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    const base64Data = e.target.result.split(',')[1];
-    const msgBox = document.getElementById('chat-messages');
-    msgBox.innerHTML += `<div class="chat-bubble user">📸 [Foto inviata]</div>`;
-    const loaderId = 'loader-' + Date.now();
-    msgBox.innerHTML += `<div class="chat-bubble ai" id="${loaderId}"><div class="ai-typing"><span></span><span></span><span></span></div></div>`;
-    msgBox.scrollTop = msgBox.scrollHeight;
-
-    const payload = {
-      contents: [{ role: "user", parts: [ { text: "Sei una guida turistica della Sicilia. Identifica questo luogo, flora o cibo tipico e fornisci una spiegazione estesa, ricca di dettagli, storia e curiosità." }, { inlineData: { mimeType: file.type, data: base64Data } }] }]
-    };
-
-    try {
-      const risposta = await fetchGeminiWithRetry(payload, false, true);
-      // FIX XSS: risposta AI sanitizzata
-      const aiBubble = document.createElement('div');
-      aiBubble.className = 'chat-bubble ai';
-      aiBubble.innerHTML = '👁️ <b>Analisi visiva:</b><br>' + escapeHTML(risposta).replace(/\n/g, '<br>');
-      document.getElementById(loaderId).replaceWith(aiBubble);
-    } catch (err) {
-      document.getElementById(loaderId).outerHTML = `<div class="chat-bubble ai" style="color:var(--rust)">Non sono riuscito ad analizzare la foto.</div>`;
-    }
-    msgBox.scrollTop = msgBox.scrollHeight;
-  };
-  reader.readAsDataURL(file);
 }
 
 async function chiediConsiglioMeteoAI() {
