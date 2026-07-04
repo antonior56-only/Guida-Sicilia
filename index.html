@@ -5089,7 +5089,8 @@ async function cercaConAI() {
   try {
     const payload = {
       contents: [{ parts: [{ text: userPrompt }] }],
-      systemInstruction: { parts: [{ text: systemPrompt }] }
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      generationConfig: { maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 }, responseMimeType: 'application/json' }
     };
     const raw = await fetchGeminiWithRetry(payload, true, false, 0, false);
 
@@ -6732,7 +6733,7 @@ async function itinOrganizzaGiorniAI() {
   const nomi = it.tappe.map(tp=>tp.nome);
   const nG = it.tappe.length > 0 ? Math.max(...it.tappe.map(tp => tp.giorno||1)) : 1;
   try {
-    const payload={contents:[{parts:[{text:"Distribuisci queste "+nomi.length+" tappe in "+nG+" giorni in modo logico per la Sicilia (max 4 tappe/giorno). Tappe: "+nomi.join(", ")}]}],systemInstruction:{parts:[{text:"Rispondi SOLO con JSON: {\"assignments\":[{\"nome\":\"...\",\"giorno\":1},...]}"  }]}};
+    const payload={contents:[{parts:[{text:"Distribuisci queste "+nomi.length+" tappe in "+nG+" giorni in modo logico per la Sicilia (max 4 tappe/giorno). Tappe: "+nomi.join(", ")}]}],systemInstruction:{parts:[{text:"Rispondi SOLO con JSON: {\"assignments\":[{\"nome\":\"...\",\"giorno\":1},...]}"  }]},generationConfig:{maxOutputTokens:2048,thinkingConfig:{thinkingBudget:0},responseMimeType:"application/json"}};
     const raw=await fetchGeminiWithRetry(payload,true,false,0,false);
     if(raw.assignments){raw.assignments.forEach(a=>{const tp=it.tappe.find(x=>x.nome.toLowerCase()===(a.nome||"").toLowerCase());if(tp)tp.giorno=parseInt(a.giorno)||1;});itinSalva();itinRenderViewer();showToast(t("itin_ai_dividi_ok"));}
   } catch(e){showToast(t("wz_genera_err"));}
@@ -7337,9 +7338,12 @@ async function fetchGeminiWithRetry(payload, isJson = false, isVision = false, r
   }
 
   if (isJson) {
+    // Preserva l'eventuale generationConfig gia impostato dal chiamante
+    // (maxOutputTokens, thinkingConfig) e aggiungi solo cio che serve per il JSON.
+    const gcBase = payload.generationConfig || { maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } };
     if (jsonSchema === false) {
       // Wizard: solo JSON libero, nessuno schema rigido (evita timeout/troncamenti)
-      payload.generationConfig = { responseMimeType: "application/json" };
+      payload.generationConfig = Object.assign({}, gcBase, { responseMimeType: "application/json" });
     } else {
       // Altre funzioni: schema strutturato tappe[]
       const schema = jsonSchema || {
@@ -7348,7 +7352,7 @@ async function fetchGeminiWithRetry(payload, isJson = false, isVision = false, r
           km: { type: "INTEGER" }, tappe: { type: "ARRAY", items: { type: "STRING" } }
         }, required: ["name", "desc", "giorni", "km", "tappe"]
       };
-      payload.generationConfig = { responseMimeType: "application/json", responseSchema: schema };
+      payload.generationConfig = Object.assign({}, gcBase, { responseMimeType: "application/json", responseSchema: schema });
     }
   }
 
@@ -7631,7 +7635,8 @@ Rispondi SOLO con questo JSON (nessun testo fuori dal JSON):
 
   const payload = {
     contents: [{ parts: [{ text: `Crea itinerario CONCENTRATO nella zona ${vals.zona||'Sicilia'} (tappe vicine, niente lunghi spostamenti): ${vals.giorni} giorni, ${vals.chi}, ${vals.budget}, interessi: ${vals.interessi.join(',')||'vari'}` }] }],
-    systemInstruction: { parts: [{ text: systemPrompt }] }
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    generationConfig: { maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: 0 }, responseMimeType: 'application/json' }
   };
 
   try {
