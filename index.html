@@ -1101,6 +1101,12 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--cream);c
 }
 .chat-bubble.user {background:var(--sky);color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
 .chat-bubble.ai {background:#fff;color:var(--text);align-self:flex-start;border-bottom-left-radius:4px;border:1px solid var(--border)}
+.grounding-badge{display:inline-block;font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;margin-top:8px}
+.grounding-badge.verified{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7}
+.grounding-badge.unverified{background:#fff8e1;color:#8d6e00;border:1px solid #ffe082}
+.fonti-box{font-size:11px;margin-top:6px;line-height:1.6;color:var(--muted)}
+.fonti-box a{color:var(--sage);text-decoration:none;font-weight:600}
+.fonti-box a:hover{text-decoration:underline}
 #chat-input-area {
   display:flex;padding:10px;background:#fff;border-top:1px solid var(--border);gap:8px;
 }
@@ -3156,6 +3162,10 @@ const TRANSLATIONS = {
     reset_ok: 'Dati resettati. L\'app si riavviera...',
     vision_analisi: 'Analizzo la foto...',
     vision_fallita: 'Non sono riuscito ad analizzare la foto. Riprova.',
+    grounding_verificato: 'Verificato con Google',
+    grounding_non_verificato: 'Non verificato',
+    grounding_fonti: 'Fonti',
+    grounding_retry: 'Servizio occupato, riprovo tra',
   },
   en: {
     // Login
@@ -3535,6 +3545,10 @@ const TRANSLATIONS = {
     reset_ok: 'Data reset. The app will restart...',
     vision_analisi: 'Analyzing the photo...',
     vision_fallita: 'Could not analyze the photo. Try again.',
+    grounding_verificato: 'Verified with Google',
+    grounding_non_verificato: 'Not verified',
+    grounding_fonti: 'Sources',
+    grounding_retry: 'Service busy, retrying in',
   }
 };
 
@@ -6535,9 +6549,9 @@ async function generaGuidaAI(mode) {
   // Se già generata e non in errore → riusa la cache
   if (_guidaAICache[nome]) {
     textDiv.style.display = 'block';
-    textDiv.innerHTML = _guidaAICache[nome];
+    textDiv.innerHTML = _guidaAICache[nome].html;
     if (mode === 'audio') {
-      leggiAdAltaVoce(textDiv.innerText);
+      leggiAdAltaVoce(_guidaAICache[nome].testo);
       if (btnStop) btnStop.style.display = 'inline-block';
     }
     return;
@@ -6550,12 +6564,14 @@ async function generaGuidaAI(mode) {
 
   try {
     const lang = currentLang === 'en' ? 'English' : 'italiano';
-    const prompt = 'Sei una guida turistica esperta della Sicilia. Scrivi un racconto evocativo e appassionante sul luogo "' + nome + '". Includi storia, curiosità, atmosfera e consigli pratici. Testo pulito, nessuna formattazione. Max 120 parole. Lingua: ' + lang + '.';
+    const prompt = 'Sei una guida turistica esperta della Sicilia. Scrivi un racconto evocativo e appassionante sul luogo "' + nome + '". Includi storia, curiosità, atmosfera e consigli pratici. Testo pulito, nessuna formattazione. Max 120 parole. Lingua: ' + lang + '. ' + getPromptAntiAllucinazione();
     const payload = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 1000, thinkingConfig: { thinkingBudget: 0 } } };
-    const raw = await fetchGeminiWithRetry(payload, false, false, 0, false);
-    const testo = typeof raw === 'string' ? raw : JSON.stringify(raw);
-    _guidaAICache[nome] = testo;
-    textDiv.innerHTML = testo;
+    const risultato = await fetchGeminiGrounded(payload);
+    const testo = risultato.text || '';
+    // Testo pulito per l'audio; HTML con badge/fonti per la visualizzazione
+    const html = escapeHtmlItin(testo).replace(/\n/g, '<br>') + renderGroundingBadge(risultato.verified, risultato.sources);
+    _guidaAICache[nome] = { html: html, testo: testo };
+    textDiv.innerHTML = html;
     if (mode === 'audio') {
       leggiAdAltaVoce(testo);
       if (btnStop) btnStop.style.display = 'inline-block';
@@ -7325,6 +7341,96 @@ async function analizzaFotoAI(event) {
 }
 
 
+// ═══════════════════════════════════════════════════════
+// GROUNDING CON GOOGLE SEARCH (anti-allucinazione)
+// ═══════════════════════════════════════════════════════
+function getPromptAntiAllucinazione() {
+  if (currentLang === 'en') {
+    return "Answer ONLY based on the search results. Never invent menus, dishes, prices, opening hours or services. If the sources do not contain a requested piece of information, clearly write: \"I could not find verified information on this aspect, I recommend contacting the venue directly.\" Information about hours and prices may be out of date: always invite the user to verify. Reply in English.";
+  }
+  return "Rispondi SOLO in base ai risultati di ricerca. Non inventare mai menu, piatti, prezzi, orari o servizi. Se le fonti non contengono un'informazione richiesta, scrivi chiaramente: \"Non ho trovato informazioni verificate su questo aspetto, ti consiglio di contattare direttamente la struttura.\" Le informazioni su orari e prezzi potrebbero non essere aggiornate: invita sempre a verificare. Rispondi in italiano.";
+}
+
+// Chiamata AI con grounding Google Search. Ritorna {text, sources, verified}.
+async function fetchGeminiGrounded(payload, retryCount = 0) {
+  let activeKey = localStorage.getItem('sicilia_gemini_key');
+  if (!activeKey) {
+    const nuova = await askForApiKeyModal();
+    if (!nuova) throw new Error('API key mancante');
+    localStorage.setItem('sicilia_gemini_key', nuova);
+    activeKey = nuova;
+  }
+
+  const model = await getModelloAI(activeKey) || 'gemini-2.5-flash';
+  // Tool di grounding: nome diverso per i modelli 1.5
+  const toolName = model.indexOf('gemini-1.5') === 0 ? 'google_search_retrieval' : 'google_search';
+  const groundedPayload = JSON.parse(JSON.stringify(payload));
+  groundedPayload.tools = [{ [toolName]: {} }];
+
+  const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + activeKey;
+
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 45000);
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(groundedPayload),
+      signal: ctrl.signal
+    });
+    clearTimeout(tid);
+    if (!resp.ok) { const err = new Error('HTTP ' + resp.status); err.status = resp.status; throw err; }
+
+    const data = await resp.json();
+    const cand = data.candidates && data.candidates[0];
+    let text = '';
+    if (cand && cand.content && cand.content.parts) {
+      text = cand.content.parts.map(function(p){ return p.text || ''; }).join('');
+    }
+    const gm = cand && cand.groundingMetadata;
+    let sources = [];
+    if (gm && gm.groundingChunks) {
+      sources = gm.groundingChunks
+        .map(function(c){ return c.web ? { title: c.web.title || c.web.uri, url: c.web.uri } : null; })
+        .filter(function(s){ return s && s.url; });
+    }
+    return { text: text, sources: sources, verified: !!gm };
+  } catch(e) {
+    // Chiave non valida: chiedi di reinserirla una volta
+    if ((e.status === 400 || e.status === 403) && retryCount === 0) {
+      localStorage.removeItem('sicilia_gemini_key');
+      const nuova = await askForApiKeyModal();
+      if (!nuova) throw new Error('API key non valida');
+      localStorage.setItem('sicilia_gemini_key', nuova);
+      return fetchGeminiGrounded(payload, retryCount + 1);
+    }
+    // Sovraccarico temporaneo: riprova con attesa
+    if ((e.status === 503 || e.status === 429 || e.status === 500) && retryCount < 2) {
+      const wait = (retryCount + 1) * 2000;
+      if (typeof showToast === 'function') showToast('\u23f3 ' + t('grounding_retry') + ' ' + (wait/1000) + 's\u2026');
+      await new Promise(function(r){ setTimeout(r, wait); });
+      return fetchGeminiGrounded(payload, retryCount + 1);
+    }
+    throw e;
+  }
+}
+
+// Costruisce il badge "verificato/non verificato" + elenco fonti
+function renderGroundingBadge(verified, sources) {
+  let html = '<div class="grounding-badge ' + (verified ? 'verified' : 'unverified') + '">'
+    + (verified ? '\u2705 ' + t('grounding_verificato') : '\u26a0\ufe0f ' + t('grounding_non_verificato'))
+    + '</div>';
+  if (sources && sources.length) {
+    html += '<div class="fonti-box">\uD83D\uDD17 ' + t('grounding_fonti') + ': ';
+    html += sources.slice(0, 5).map(function(s){
+      return '<a href="' + s.url + '" target="_blank" rel="noopener">' + escapeHtmlItin(s.title || s.url) + '</a>';
+    }).join(' \u00b7 ');
+    html += '</div>';
+  }
+  return html;
+}
+
+
 async function fetchGeminiWithRetry(payload, isJson = false, isVision = false, retryCount = 0, jsonSchema = null) {
   const MAX_RETRIES = 2;
   let activeKey = localStorage.getItem('sicilia_gemini_key') || apiKey;
@@ -7447,18 +7553,29 @@ async function inviaMessaggioAI() {
 
   const payload = {
     contents: [{ parts: [{ text: txt }] }],
-    systemInstruction: { parts: [{ text: `Sei una guida turistica esperta, loquace e appassionata della Sicilia. Le tue risposte devono essere sempre corpose, ampie e molto dettagliate. Fornisci descrizioni ricche, aneddoti e spiega bene i motivi dei tuoi suggerimenti. Suggerisci luoghi basandoti ESCLUSIVAMENTE sui seguenti dati dell'app: ${getAppDati()}` }] }
+    systemInstruction: { parts: [{ text: `Sei una guida turistica esperta, loquace e appassionata della Sicilia. Le tue risposte devono essere sempre corpose, ampie e molto dettagliate. Fornisci descrizioni ricche, aneddoti e spiega bene i motivi dei tuoi suggerimenti. Privilegia i seguenti dati dell'app: ${getAppDati()}. ${getPromptAntiAllucinazione()}` }] }
   };
 
   try {
-    const risposta = await fetchGeminiWithRetry(payload, false);
-    // FIX XSS: risposta AI sanitizzata prima dell'inserimento HTML
+    // Grounding con Google Search: verifica orari/prezzi/eventi in tempo reale
+    const risultato = await fetchGeminiGrounded(payload);
     const aiBubble = document.createElement('div');
     aiBubble.className = 'chat-bubble ai';
-    aiBubble.innerHTML = escapeHTML(risposta).replace(/\n/g, '<br>');
+    // FIX XSS: risposta AI sanitizzata prima dell'inserimento HTML
+    aiBubble.innerHTML = escapeHTML(risultato.text).replace(/\n/g, '<br>')
+      + renderGroundingBadge(risultato.verified, risultato.sources);
     document.getElementById(loaderId).replaceWith(aiBubble);
   } catch (e) {
-    document.getElementById(loaderId).outerHTML = `<div class="chat-bubble ai" style="color:var(--rust)">${t('err_ai')}</div>`;
+    // Fallback: se il grounding fallisce, prova la chiamata standard senza ricerca
+    try {
+      const risposta = await fetchGeminiWithRetry(payload, false);
+      const aiBubble = document.createElement('div');
+      aiBubble.className = 'chat-bubble ai';
+      aiBubble.innerHTML = escapeHTML(risposta).replace(/\n/g, '<br>');
+      document.getElementById(loaderId).replaceWith(aiBubble);
+    } catch (e2) {
+      document.getElementById(loaderId).outerHTML = `<div class="chat-bubble ai" style="color:var(--rust)">${t('err_ai')}</div>`;
+    }
   }
   msgBox.scrollTop = msgBox.scrollHeight;
 }
@@ -8003,12 +8120,13 @@ async function chiediSommelierAI(nome, loc, cucina) {
 
   try {
     const promptTesto = `Consiglia 2 piatti tipici precisi di ${loc} per il ristorante "${nome}" (cucina: ${cucina}), e un vino siciliano da abbinare. Scrivi una recensione estesa, descrivendo accuratamente i sapori, gli ingredienti e il motivo per cui l'abbinamento del vino è perfetto.`;
-    const payload = { contents: [{ parts: [{ text: promptTesto }] }], systemInstruction: { parts: [{ text: "Sei un sommelier siciliano." }] } };
-    const risposta = await fetchGeminiWithRetry(payload, false);
+    const payload = { contents: [{ parts: [{ text: promptTesto }] }], systemInstruction: { parts: [{ text: "Sei un sommelier siciliano. " + getPromptAntiAllucinazione() }] } };
+    const risultato = await fetchGeminiGrounded(payload);
     // FIX XSS: risposta sanitizzata
     const aiBubble = document.createElement('div');
     aiBubble.className = 'chat-bubble ai';
-    aiBubble.innerHTML = '🍷 <b>Consiglio:</b><br>' + escapeHTML(risposta).replace(/\n/g, '<br>');
+    aiBubble.innerHTML = '🍷 <b>Consiglio:</b><br>' + escapeHTML(risultato.text).replace(/\n/g, '<br>')
+      + renderGroundingBadge(risultato.verified, risultato.sources);
     document.getElementById(loaderId).replaceWith(aiBubble);
   } catch(e) {
     document.getElementById(loaderId).outerHTML = `<div class="chat-bubble ai" style="color:var(--rust)">${t('err_connessione')}</div>`;
