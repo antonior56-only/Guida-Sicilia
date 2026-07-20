@@ -2210,6 +2210,9 @@ box-shadow:0 4px 14px rgba(0,0,0,.15)">
           <button onclick="cercaAlloggiPartner('tripadvisor')" style="padding:10px;background:#00aa6c;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
             🦉 TripAdv Hotel
           </button>
+          <button onclick="window.open('https://www.campeggi.com/sicilia','_blank','noopener')" style="padding:10px;background:#2e7d32;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+            ⛺ Campeggi
+          </button>
         </div>
 
         <div class="section-title" data-i18n="section_alloggi_title">Strutture Siciliane</div>
@@ -3166,6 +3169,8 @@ const TRANSLATIONS = {
     grounding_non_verificato: 'Non verificato',
     grounding_fonti: 'Fonti',
     grounding_retry: 'Servizio occupato, riprovo tra',
+    btn_sito_web: 'Sito Web',
+    btn_cerca_online: 'Cerca online',
   },
   en: {
     // Login
@@ -3549,6 +3554,8 @@ const TRANSLATIONS = {
     grounding_non_verificato: 'Not verified',
     grounding_fonti: 'Sources',
     grounding_retry: 'Service busy, retrying in',
+    btn_sito_web: 'Website',
+    btn_cerca_online: 'Search online',
   }
 };
 
@@ -4707,8 +4714,15 @@ function showInfoByName(name, type) {
 
   const webBtnEl = document.getElementById('info-web-btn');
   webBtnEl.innerHTML = '';
-  if(p.url) {
-    webBtnEl.innerHTML = `<a href="${p.url}" target="_blank" rel="noopener noreferrer" class="btn" style="background:var(--sky);color:#fff;display:inline-block;text-decoration:none">🌐 Sito Web</a>`;
+  // Il sito puo essere in 'url' (luoghi, sentieri, alloggi) o in 'web' (ristoranti custom)
+  const sitoUfficiale = safeUrl(p.url || p.web || '');   // url non valido -> '' -> fallback 'Cerca online'
+  if (sitoUfficiale) {
+    webBtnEl.innerHTML = `<a href="${escapeHtmlItin(sitoUfficiale)}" target="_blank" rel="noopener noreferrer" class="btn" style="background:var(--sky);color:#fff;display:inline-block;text-decoration:none">🌐 ${t('btn_sito_web')}</a>`;
+  } else {
+    // Fallback: nessun sito noto -> ricerca Google con nome + localita
+    const loc = p.loc || p.comune || p.prov || '';
+    const q = encodeURIComponent(`${p.name} ${loc} Sicilia`.trim().replace(/\s+/g, ' '));
+    webBtnEl.innerHTML = `<a href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener noreferrer" class="btn" style="background:var(--muted);color:#fff;display:inline-block;text-decoration:none">🔍 ${t('btn_cerca_online')}</a>`;
   }
 
   renderRatingBtns(document.getElementById('info-rating'), name);
@@ -5539,7 +5553,7 @@ function renderEventi() {
   const el3 = document.getElementById('social-eventi');
   if (el3) {
     el3.innerHTML = SOCIAL_EVENTI.map(s => `
-      <a href="${s.url}" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:10px 13px;margin-bottom:8px;text-decoration:none;color:var(--text);transition:all .2s;">
+      <a href="${safeUrl(s.url)}" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:10px 13px;margin-bottom:8px;text-decoration:none;color:var(--text);transition:all .2s;">
         <span style="font-size:22px">${s.icon}</span>
         <div><div style="font-size:13px;font-weight:600;color:var(--forest)">${s.nome}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${s.desc}</div></div>
         <span style="margin-left:auto;font-size:13px;color:var(--muted)">↗</span>
@@ -5978,6 +5992,21 @@ function itinRenderGiorni(it) {
 }
 
 // Helper: escape minimo per attributi HTML
+// Valida un URL prima di inserirlo in un href: accetta SOLO http/https,
+// blocca javascript:, data:, vbscript: e simili, che altrimenti verrebbero
+// eseguiti al click su un link costruito da dati esterni (import AI, link
+// custom di luoghi/ristoranti, fonti del grounding).
+function safeUrl(u) {
+  let s = (u || '').toString().trim();
+  if (!s) return '';
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(s)) s = 'https://' + s.replace(/^\/+/, '');
+  try {
+    const p = new URL(s);
+    if (p.protocol !== 'http:' && p.protocol !== 'https:') return '';
+    return p.href;
+  } catch (e) { return ''; }
+}
+
 function escapeHtmlItin(str) {
   if (!str) return '';
   return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -7423,7 +7452,7 @@ function renderGroundingBadge(verified, sources) {
   if (sources && sources.length) {
     html += '<div class="fonti-box">\uD83D\uDD17 ' + t('grounding_fonti') + ': ';
     html += sources.slice(0, 5).map(function(s){
-      return '<a href="' + s.url + '" target="_blank" rel="noopener">' + escapeHtmlItin(s.title || s.url) + '</a>';
+      return '<a href="' + safeUrl(s.url) + '" target="_blank" rel="noopener">' + escapeHtmlItin(s.title || s.url) + '</a>';
     }).join(' \u00b7 ');
     html += '</div>';
   }
