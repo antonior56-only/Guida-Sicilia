@@ -2026,7 +2026,7 @@ body.is-admin .admin-only-block{ display:block !important }
 
       <div class="panel active" id="panel-luoghi">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <input class="search-box" id="search-luoghi" placeholder="🔍 Cerca borgo, castello, spiaggia…" oninput="filterLuoghi()" style="flex:1;margin-right:4px"/>
+          <input class="search-box" id="search-luoghi" placeholder="🔍 Cerca borgo, castello, spiaggia…" oninput="filterLuoghiD()" style="flex:1;margin-right:4px"/>
           <button class="btn-ai-search" id="btn-cerca-ai" onclick="cercaConAI()" data-i18n="btn_cerca_ai" title="Ricerca intelligente con AI">🤖</button>
           <button class="btn btn-gold admin-only" onclick="openLuogoModal()" style="white-space:nowrap;flex-shrink:0;margin-left:4px" data-i18n-btn="btn_aggiungi">+ Aggiungi</button>
         </div>
@@ -2063,7 +2063,7 @@ box-shadow:0 4px 14px rgba(0,0,0,.15)">
 
       <div class="panel" id="panel-trekking">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <input class="search-box" id="search-trek" placeholder="🔍 Cerca sentiero o area naturale…" oninput="filterTrek()" style="flex:1;margin-right:8px"/>
+          <input class="search-box" id="search-trek" placeholder="🔍 Cerca sentiero o area naturale…" oninput="filterTrekD()" style="flex:1;margin-right:8px"/>
           <button class="btn btn-gold admin-only" onclick="openSentieroModal()" style="white-space:nowrap;flex-shrink:0" data-i18n-btn="btn_aggiungi">+ Aggiungi</button>
         </div>
         <div class="filter-row" id="filter-diff">
@@ -2120,7 +2120,7 @@ box-shadow:0 4px 14px rgba(0,0,0,.15)">
 
       <div class="panel" id="panel-ristoranti">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <input class="search-box" id="search-rest" placeholder="🔍 Cerca ristorante o cucina…" oninput="filterRest()" style="flex:1;margin-right:8px"/>
+          <input class="search-box" id="search-rest" placeholder="🔍 Cerca ristorante o cucina…" oninput="filterRestD()" style="flex:1;margin-right:8px"/>
           <button class="btn btn-gold admin-only" onclick="openRistoranteModal()" style="white-space:nowrap;flex-shrink:0" data-i18n-btn="btn_aggiungi">+ Aggiungi</button>
         </div>
         <div class="rest-filter-group" style="margin-top:4px">
@@ -2167,7 +2167,7 @@ box-shadow:0 4px 14px rgba(0,0,0,.15)">
 
       <div class="panel" id="panel-alloggi">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <input class="search-box" id="search-alloggi" placeholder="🔍 Cerca alloggio (es. Nome, zona...)" oninput="filterAlloggi()" style="flex:1;margin-right:8px"/>
+          <input class="search-box" id="search-alloggi" placeholder="🔍 Cerca alloggio (es. Nome, zona...)" oninput="filterAlloggiD()" style="flex:1;margin-right:8px"/>
           <button class="btn btn-gold admin-only" onclick="openAlloggioModal()" style="white-space:nowrap;flex-shrink:0" data-i18n-btn="btn_aggiungi">+ Aggiungi</button>
         </div>
 
@@ -2345,7 +2345,7 @@ box-shadow:0 4px 14px rgba(0,0,0,.15)">
             <div style="display:flex;gap:6px;margin-top:4px">
               <input id="itin-search-tappa" type="text"
                 placeholder="🔍 Cerca tappa..."
-                oninput="itinApplicaFiltro()" style="flex:1"/>
+                oninput="itinApplicaFiltroD()" style="flex:1"/>
               <button class="btn-filter-reset" onclick="itinResetFiltro()">✕</button>
             </div>
           </div>
@@ -2728,7 +2728,8 @@ box-shadow:0 4px 14px rgba(0,0,0,.15)">
         <option value="gemini-2.0-flash">Gemini 2.0 Flash — alternativa veloce</option>
         <option value="gemini-flash-latest">Gemini Flash Latest — sempre l'ultima versione flash</option>
       </select>
-      <p style="font-size:12px;color:#555;margin-bottom:8px" data-i18n="settings_key_desc">Rimuovi la chiave Gemini se vuoi cambiarla o disattivare temporaneamente l'AI.</p>
+      <p style="font-size:12px;color:#555;margin-bottom:4px" data-i18n="settings_key_desc">Rimuovi la chiave Gemini se vuoi cambiarla o disattivare temporaneamente l'AI.</p>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:8px;font-style:italic" data-i18n="settings_key_privacy">🔒 La chiave resta solo sul tuo dispositivo, non viene mai inviata ad altri.</p>
       <button class="btn btn-outline" onclick="rimuoviApiKey()" style="font-size:12px;width:100%;border-color:var(--rust);color:var(--rust)">Rimuovi API Key salvata</button>
     </div>
 
@@ -3171,6 +3172,9 @@ const TRANSLATIONS = {
     grounding_retry: 'Servizio occupato, riprovo tra',
     btn_sito_web: 'Sito Web',
     btn_cerca_online: 'Cerca online',
+    pick_banner_testo: 'Clicca sul punto esatto della mappa',
+    pick_banner_annulla: 'Annulla',
+    settings_key_privacy: '\uD83D\uDD12 La chiave resta solo sul tuo dispositivo, non viene mai inviata ad altri.',
   },
   en: {
     // Login
@@ -3556,6 +3560,9 @@ const TRANSLATIONS = {
     grounding_retry: 'Service busy, retrying in',
     btn_sito_web: 'Website',
     btn_cerca_online: 'Search online',
+    pick_banner_testo: 'Tap the exact spot on the map',
+    pick_banner_annulla: 'Cancel',
+    settings_key_privacy: '\uD83D\uDD12 Your key stays on your device only, it is never sent to anyone else.',
   }
 };
 
@@ -3617,8 +3624,8 @@ async function caricaDatiEsterni() {
     DATI_SICILIA_FALLBACK.forEach(d => DATI_SICILIA.push(d));
   const baseUrl = window.location.href.split('?')[0].replace(/\/[^\/]*$/, '/');
   try {
-    let res = await fetch(baseUrl + 'dati_sicilia.json');
-    if (!res.ok) res = await fetch('./dati_sicilia.json');
+    let res = await fetchTimeout(baseUrl + 'dati_sicilia.json', {}, 15000);
+    if (!res.ok) res = await fetchTimeout('./dati_sicilia.json', {}, 15000);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     DATI_SICILIA.length = 0; data.forEach(d => DATI_SICILIA.push(d));
@@ -4087,7 +4094,7 @@ async function cercaPerNome(tipo) {
     const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=it&q='
       + encodeURIComponent(query)
       + '&accept-language=it';
-    const res = await fetch(url, { headers: { 'User-Agent': 'SiciliaTurismo/1.0' } });
+    const res = await fetchTimeout(url, { headers: { 'User-Agent': 'SiciliaTurismo/1.0' } }, 8000);
     const results = await res.json();
 
     // Filtra risultati in Sicilia (lat 36.5-38.4, lon 11.8-15.7)
@@ -4676,7 +4683,7 @@ function showInfoByName(name, type) {
   if(p.price) bd.innerHTML += `<span class="badge">${p.price}</span>`;
   if(p.prezzo) bd.innerHTML += `<span class="badge">€${p.prezzo} / ${t('badge_notte')}</span>`;
   if(p.voto) bd.innerHTML += `<span class="badge">⭐ ${p.voto}</span>`;
-  if(p.loc) bd.innerHTML += `<span class="badge">📍 ${p.loc}</span>`;
+  if(p.loc) bd.innerHTML += `<span class="badge">📍 ${escapeHtmlItin(p.loc)}</span>`;
   if(p.comune && p.comune !== p.loc) bd.innerHTML += `<span class="badge">🏘 ${p.comune}</span>`;
   if(p.prov) bd.innerHTML += `<span class="badge">${p.prov}</span>`;
 
@@ -4794,7 +4801,7 @@ const WMO = {0:'☀️ Sereno',1:'🌤 Quasi sereno',2:'⛅ Parzialmente nuvolos
 async function fetchMeteo(lat, lon, el) {
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weathercode,windspeed_10m&wind_speed_unit=kmh&timezone=Europe%2FRome`;
-    const r = await fetch(url);
+    const r = await fetchTimeout(url, {}, 8000);
     const d = await r.json();
     const c = d.current;
     const desc = WMO[c.weathercode] || '🌡 Meteo';
@@ -5183,6 +5190,25 @@ function renderLuoghiConAI() {
   if (first) first.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// ═══════════════════════════════════════════════════════
+// DEBOUNCE RICERCA: evita di ricostruire la lista ad ogni tasto
+// ═══════════════════════════════════════════════════════
+function debounce(fn, ms = 200) {
+  let t;
+  return function() {
+    const args = arguments;
+    clearTimeout(t);
+    t = setTimeout(function(){ fn.apply(null, args); }, ms);
+  };
+}
+// Wrapper esposti su window: gli oninput inline nel markup non risolvono
+// i riferimenti dichiarati con const/let dentro lo script.
+window.filterLuoghiD   = debounce(function(){ filterLuoghi(); });
+window.filterTrekD     = debounce(function(){ filterTrek(); });
+window.filterRestD     = debounce(function(){ filterRest(); });
+window.filterAlloggiD  = debounce(function(){ filterAlloggi(); });
+window.itinApplicaFiltroD = debounce(function(){ itinApplicaFiltro(); });
+
 function filterLuoghi() { renderLuoghi(); updateMap(); }
 function filterTrek() { renderTrek(); updateMap(); }
 function filterRest() { renderRest(); updateMap(); }
@@ -5214,13 +5240,13 @@ function renderLuoghi(){
     d.dataset.name = p.name;
     const rv = VALUTAZIONI[p.name] === '❤️' ? '❤️' : '';
     const catLabel = t('cat_' + p.cat) !== ('cat_' + p.cat) ? t('cat_' + p.cat) : (p.cat ? p.cat.charAt(0).toUpperCase() + p.cat.slice(1) : '');
-    d.innerHTML = `<h3>${p.name}
+    d.innerHTML = `<h3>${escapeHtmlItin(p.name)}
       ${p.pop?`<span class="badge" style="background:#fff3cd;color:#856404;margin-left:5px">${t('badge_pop')}</span>`:''}
       ${p.custom?`<span class="badge" style="background:#e8f0fe;color:#1565c0;margin-left:5px">${t('badge_mio')}</span>`:''}
       ${rv?`<span style="margin-left:4px;font-size:14px">${rv}</span>`:''}
     </h3>
     <div class="badge-row"><span class="badge cat-${p.cat}">${catLabel}</span></div>
-    <p>${p.desc}</p>
+    <p>${escapeHtmlItin(p.desc)}</p>
     <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">
       <button data-n="${p.name}" onclick="event.stopPropagation(); showInfoByName(this.dataset.n, 'luogo')" style="font-size:11px;background:var(--sky);color:#fff;border:none;border-radius:6px;padding:3px 10px;cursor:pointer;font-weight:600">${t('btn_dettagli')}</button>
       <button data-n="${p.name}" onclick="event.stopPropagation(); eliminaLuogoCustom(this.dataset.n)" style="font-size:11px;background:#c62828;color:#fff;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-weight:600;display:${p.custom?'inline-block':'none'}">${t('btn_rimuovi')}</button>
@@ -5289,12 +5315,12 @@ function renderTrek(){
     d.className = 'list-card';
     d.dataset.name = s.name;
     const rv = VALUTAZIONI[s.name] === '❤️' ? '❤️' : '';
-    d.innerHTML = `<h3>${s.name} ${s.custom ? '<span class="badge" style="background:#e8f0fe;color:#1565c0;margin-left:5px">✏️ Mio</span>' : ''} ${rv?`<span style="margin-left:4px;font-size:14px">${rv}</span>`:''}</h3>
+    d.innerHTML = `<h3>${escapeHtmlItin(s.name)} ${s.custom ? '<span class="badge" style="background:#e8f0fe;color:#1565c0;margin-left:5px">✏️ Mio</span>' : ''} ${rv?`<span style="margin-left:4px;font-size:14px">${rv}</span>`:''}</h3>
       <div class="badge-row">
         <span class="badge diff-${s.diff}">${s.diff==='F'?t('diff_facile'):s.diff==='M'?t('diff_medio'):s.diff==='D'?t('diff_difficile'):t('diff_esperto')}</span>
         <span class="badge">📏 ${s.km} km</span><span class="badge">⏱ ${s.h}</span>
       </div>
-      <p>🚩 ${s.start} · ${s.desc}</p>
+      <p>🚩 ${escapeHtmlItin(s.start)} · ${escapeHtmlItin(s.desc)}</p>
       <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">
         ${s.url ? `<button data-u="${s.url}" onclick="event.stopPropagation(); window.open(this.dataset.u,'_blank')" style="font-size:11px;background:#00b562;color:#fff;border:none;border-radius:6px;padding:3px 10px;cursor:pointer;font-weight:600">🌐 Web</button>` : ''}
         ${s.custom
@@ -5366,14 +5392,14 @@ function renderRest(){
     d.className = 'list-card';
     d.dataset.name = r.name;
     const rv = VALUTAZIONI[r.name] === '❤️' ? '❤️' : '';
-    d.innerHTML = `<h3>${r.name} ${r.custom ? '<span class="badge" style="background:#e8f0fe;color:#1565c0;margin-left:5px">✏️ Mio</span>' : ''} ${rv?`<span style="margin-left:4px;font-size:14px">${rv}</span>`:''}</h3>
+    d.innerHTML = `<h3>${escapeHtmlItin(r.name)} ${r.custom ? '<span class="badge" style="background:#e8f0fe;color:#1565c0;margin-left:5px">✏️ Mio</span>' : ''} ${rv?`<span style="margin-left:4px;font-size:14px">${rv}</span>`:''}</h3>
       <div class="badge-row">
         <span class="badge cat-ristorante">${r.cat}</span>
         <span class="badge">${r.price}</span>
         ${r.voto ? `<span class="badge">⭐ ${r.voto}</span>` : ''}
-        <span class="badge">📍 ${r.loc}</span>
+        <span class="badge">📍 ${escapeHtmlItin(r.loc)}</span>
       </div>
-      <p>${r.cucina} · ${r.desc}</p>
+      <p>${escapeHtmlItin(r.cucina)} · ${r.desc}</p>
       <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">
         ${r.custom 
           ? `<button data-n="${r.name}" onclick="event.stopPropagation(); eliminaRistoranteCustom(this.dataset.n)" style="font-size:11px;background:transparent;border:1px solid #ddd;border-radius:6px;padding:3px 8px;cursor:pointer;color:var(--rust)">${t('btn_rimuovi')}</button>` 
@@ -5458,12 +5484,12 @@ function renderAlloggi(){
     d.dataset.name = a.name;
     const rv = VALUTAZIONI[a.name] === '❤️' ? '❤️' : '';
     d.style.borderLeft = `4px solid ${TIPO_COLOR[a.tipo]||'#000'}`;
-    d.innerHTML = `<h3>${a.name} ${rv?`<span style="margin-left:4px;font-size:14px">${rv}</span>`:''}</h3>
+    d.innerHTML = `<h3>${escapeHtmlItin(a.name)} ${rv?`<span style="margin-left:4px;font-size:14px">${rv}</span>`:''}</h3>
       <div class="badge-row">
         <span class="badge" style="background:#e8f4fd;color:#003580">${t('cat_' + a.tipo) !== ('cat_' + a.tipo) ? t('cat_' + a.tipo) : a.tipo}</span>
         <span class="badge">€${a.prezzo} / ${t('badge_notte')}</span>
         ${a.voto ? `<span class="badge">⭐ ${a.voto}</span>` : ''}
-        <span class="badge">📍 ${a.loc}</span>
+        <span class="badge">📍 ${escapeHtmlItin(a.loc)}</span>
       </div>
       <p>${a.desc||''}</p>
       <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap;justify-content:flex-end">
@@ -5555,7 +5581,7 @@ function renderEventi() {
     el3.innerHTML = SOCIAL_EVENTI.map(s => `
       <a href="${safeUrl(s.url)}" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:10px 13px;margin-bottom:8px;text-decoration:none;color:var(--text);transition:all .2s;">
         <span style="font-size:22px">${s.icon}</span>
-        <div><div style="font-size:13px;font-weight:600;color:var(--forest)">${s.nome}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${s.desc}</div></div>
+        <div><div style="font-size:13px;font-weight:600;color:var(--forest)">${s.nome}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${escapeHtmlItin(s.desc)}</div></div>
         <span style="margin-left:auto;font-size:13px;color:var(--muted)">↗</span>
       </a>`).join('');
   }
@@ -5996,6 +6022,16 @@ function itinRenderGiorni(it) {
 // blocca javascript:, data:, vbscript: e simili, che altrimenti verrebbero
 // eseguiti al click su un link costruito da dati esterni (import AI, link
 // custom di luoghi/ristoranti, fonti del grounding).
+// Fetch con timeout: evita richieste appese all'infinito su meteo,
+// geocoding, elevation e caricamento dati. NON usarlo per le chiamate AI:
+// fetchGeminiWithRetry e fetchGeminiGrounded hanno gia il proprio AbortController.
+function fetchTimeout(url, opts, ms) {
+  const ctrl = new AbortController();
+  const id = setTimeout(function(){ ctrl.abort(); }, ms || 10000);
+  const options = Object.assign({}, opts || {}, { signal: ctrl.signal });
+  return fetch(url, options).finally(function(){ clearTimeout(id); });
+}
+
 function safeUrl(u) {
   let s = (u || '').toString().trim();
   if (!s) return '';
@@ -6108,7 +6144,7 @@ async function itinAggiornaMeteo(it) {
   const [lat,lon] = firstWithCoords.coords;
   try {
     const url = "https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon + "&daily=weathercode,temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=auto";
-    const res = await fetch(url); if(!res.ok) throw new Error();
+    const res = await fetchTimeout(url, {}, 8000); if(!res.ok) throw new Error();
     const data = await res.json();
     const d = data.daily;
     const code = d.weathercode[0];
@@ -6910,8 +6946,19 @@ function stampaItinerarioByName(name, isCustom) {
   if(!it) return;
   const tappe = it.tappe.map((t,i)=>`<tr><td style="padding:6px 10px;border-bottom:1px solid #eee;font-weight:600">${i+1}</td><td style="padding:6px 10px;border-bottom:1px solid #eee">${t}</td></tr>`).join('');
   const html = `<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><title>Stampa Itinerario</title>
-    <style>body{font-family:Georgia,serif;max-width:680px;margin:40px auto;color:#222;padding:0 20px} h1{color:#0d4f6e;border-bottom:2px solid #0d4f6e;padding-bottom:8px} .meta{display:flex;gap:20px;color:#666;font-size:14px;margin:12px 0 20px} table{width:100%;border-collapse:collapse;margin-top:10px} th{background:#0d4f6e;color:#fff;padding:8px 10px;text-align:left} p{line-height:1.6;color:#444} .footer{margin-top:30px;font-size:12px;color:#999;border-top:1px solid #eee;padding-top:10px} @media print{body{margin:20px}}</style></head><body>
-    <h1>🗺 ${it.name}</h1>
+    <style>body{font-family:Georgia,serif;max-width:680px;margin:40px auto;color:#222;padding:0 20px} h1{color:#0d4f6e;border-bottom:2px solid #0d4f6e;padding-bottom:8px} .meta{display:flex;gap:20px;color:#666;font-size:14px;margin:12px 0 20px} table{width:100%;border-collapse:collapse;margin-top:10px} th{background:#0d4f6e;color:#fff;padding:8px 10px;text-align:left} p{line-height:1.6;color:#444} .footer{margin-top:30px;font-size:12px;color:#999;border-top:1px solid #eee;padding-top:10px} @media print{body{margin:20px}}
+/* ── ACCESSIBILITÀ: focus visibile da tastiera ──
+   Regola in fondo al foglio per prevalere sugli outline:none sparsi. */
+a:focus-visible, button:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible,
+.btn:focus-visible, .chip:focus-visible, .tab:focus-visible,
+.search-box:focus-visible, .nav-btn:focus-visible {
+  outline: 2px solid var(--sky) !important;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+</style></head><body>
+    <h1>🗺 ${escapeHtmlItin(it.name)}</h1>
     <div class="meta"><span>⏱ ${it.giorni} ${t('itin_giorni')}</span><span>📏 ${it.km} km</span><span>🚩 ${it.tappe.length} ${t('itin_tappe')}</span></div>
     <p>${it.desc}</p>
     <table><thead><tr><th>#</th><th>${t('stampa_tappa_header')}</th></tr></thead><tbody>${tappe}</tbody></table>
@@ -7111,15 +7158,39 @@ function scegliDaMappa(prefix, modalId) {
   closeModal(modalId);
   pickingMapPointFor = prefix;
   pickingMapModalId = modalId;
-  showToast("👆 Clicca su un punto esatto della mappa");
   document.getElementById('map-container').style.cursor = 'crosshair';
-  
+
+  // Banner persistente con pulsante Annulla (sostituisce il toast transitorio)
+  const bar = document.getElementById('tappa-picker-bar');
+  if (bar) {
+    bar.innerHTML = '\uD83D\uDC46 ' + t('pick_banner_testo')
+      + ' <button onclick="annullaSceltaMappa()" style="margin-left:10px;padding:3px 12px;border:none;border-radius:6px;background:#fff;color:var(--rust);font-weight:700;font-size:12px;cursor:pointer">'
+      + t('pick_banner_annulla') + '</button>';
+    bar.style.display = 'block';
+  }
+  // ESC per annullare
+  window._pickEscHandler = function(ev){ if (ev.key === 'Escape') annullaSceltaMappa(); };
+  window.addEventListener('keydown', window._pickEscHandler);
+
   if(window.innerWidth < 768) {
     document.getElementById('sidebar').classList.remove('open');
   }
 
   map.off('click', mapClickHandler);
   map.on('click', mapClickHandler);
+}
+
+// Annulla la selezione da mappa: rimuove handler, ripristina cursore e riapre il modale
+function annullaSceltaMappa() {
+  const modalId = pickingMapModalId;
+  pickingMapPointFor = null;
+  pickingMapModalId = null;
+  map.off('click', mapClickHandler);
+  document.getElementById('map-container').style.cursor = '';
+  const bar = document.getElementById('tappa-picker-bar');
+  if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
+  if (window._pickEscHandler) { window.removeEventListener('keydown', window._pickEscHandler); window._pickEscHandler = null; }
+  if (modalId) document.getElementById(modalId).classList.add('open');
 }
 
 function mapClickHandler(e) {
@@ -7129,6 +7200,9 @@ function mapClickHandler(e) {
   document.getElementById(pickingMapPointFor + '-lng').value = e.latlng.lng.toFixed(6);
 
   document.getElementById('map-container').style.cursor = '';
+  const _bar = document.getElementById('tappa-picker-bar');
+  if (_bar) { _bar.style.display = 'none'; _bar.innerHTML = ''; }
+  if (window._pickEscHandler) { window.removeEventListener('keydown', window._pickEscHandler); window._pickEscHandler = null; }
   document.getElementById(pickingMapModalId).classList.add('open');
   showToast("Coordinate acquisite dalla mappa! ✅");
 
@@ -7493,7 +7567,7 @@ async function fetchGeminiWithRetry(payload, isJson = false, isVision = false, r
 
   const modelloAI = await getModelloAI(activeKey);
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelloAI}:generateContent?key=${activeKey}`;
-  const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  const response = await fetchTimeout(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }, 60000);
 
   if (!response.ok) {
     // 503 / 429 / 500: Gemini sovraccarico — retry automatico con backoff
@@ -7636,7 +7710,7 @@ async function fetchElevationProfile(coordsArray, el) {
      const isSinglePoint = (start[0] === end[0] && start[1] === end[1]);
      
      const url = `https://api.open-meteo.com/v1/elevation?latitude=${start[0]},${end[0]}&longitude=${start[1]},${end[1]}`;
-     const res = await fetch(url);
+     const res = await fetchTimeout(url, {}, 8000);
      const data = await res.json();
      
      if(data.elevation && data.elevation.length >= 2) {
@@ -7726,7 +7800,7 @@ async function geocodeTappa(nome, zonaHint) {
   const query = `${nome}, ${zonaHint || 'Sicilia'}, Italy`;
   try {
     const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
-    const res = await fetch(url, { headers: { 'Accept-Language': 'it' } });
+    const res = await fetchTimeout(url, { headers: { 'Accept-Language': 'it' } }, 8000);
     const data = await res.json();
     if (data && data[0]) {
       return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
@@ -8116,7 +8190,7 @@ async function elaboraConsiglioMeteo(lat, lon, locationName) {
 
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weathercode&timezone=Europe%2FRome`;
-    const r = await fetch(url); const d = await r.json();
+    const r = await fetchTimeout(url, {}, 8000); const d = await r.json();
     const meteoDesc = WMO[d.current.weathercode] || 'Meteo variabile';
     const temp = Math.round(d.current.temperature_2m);
     const promptTesto = `Il meteo attuale a ${locationName} è: ${meteoDesc} con ${temp}°C. Suggerisci 2 o più attività ideali in Sicilia, spiegando in modo approfondito e dettagliato perché sono perfette con questo tempo. Basati ESCLUSIVAMENTE sull'app: ${getAppDati()}.`;
@@ -8423,7 +8497,57 @@ window.onload = function() {
 };
 
 // Inizializzazione app (chiamata dopo il caricamento dati)
+// ═══════════════════════════════════════════════════════
+// ACCESSIBILITÀ MODALI: role/aria, Escape, focus-trap
+// Modulo self-contained: NON tocca l'apertura dei singoli modali.
+// ═══════════════════════════════════════════════════════
+function setupModalA11y() {
+  const overlays = document.querySelectorAll('.modal-overlay');
+  overlays.forEach(function(ov) {
+    ov.setAttribute('role', 'dialog');
+    ov.setAttribute('aria-modal', 'true');
+    // Quando il modale si apre, sposta il focus dentro; alla chiusura, ripristinalo
+    const obs = new MutationObserver(function() {
+      if (ov.classList.contains('open')) {
+        ov._prevFocus = document.activeElement;
+        const f = ov.querySelector('input:not([type=hidden]), select, textarea, button, a[href], [tabindex]:not([tabindex="-1"])');
+        if (f) setTimeout(function(){ try{ f.focus(); }catch(e){} }, 60);
+      } else if (ov._prevFocus) {
+        try { ov._prevFocus.focus(); } catch(e) {}
+        ov._prevFocus = null;
+      }
+    });
+    obs.observe(ov, { attributes: true, attributeFilter: ['class'] });
+  });
+
+  // Escape chiude il modale in cima; Tab resta intrappolato dentro
+  document.addEventListener('keydown', function(e) {
+    const aperti = Array.prototype.filter.call(
+      document.querySelectorAll('.modal-overlay.open'),
+      function(m){ return m.offsetParent !== null || m.style.display !== 'none'; }
+    );
+    if (!aperti.length) return;
+    const top = aperti[aperti.length - 1];
+
+    if (e.key === 'Escape') {
+      // Non chiudere se un picker mappa e attivo (gestito da annullaSceltaMappa)
+      if (typeof pickingMapPointFor !== 'undefined' && pickingMapPointFor) return;
+      top.classList.remove('open');
+      e.preventDefault();
+      return;
+    }
+    if (e.key === 'Tab') {
+      const focusabili = top.querySelectorAll('input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])');
+      if (!focusabili.length) return;
+      const primo = focusabili[0], ultimo = focusabili[focusabili.length - 1];
+      if (e.shiftKey && document.activeElement === primo) { ultimo.focus(); e.preventDefault(); }
+      else if (!e.shiftKey && document.activeElement === ultimo) { primo.focus(); e.preventDefault(); }
+    }
+  });
+}
+
 function avviaApp() {
+  setupModalA11y();
   
   // 2. Carica i dati customizzati dell'utente e li unisce
   caricaDatiLocali();
