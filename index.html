@@ -8084,8 +8084,28 @@ Rispondi SOLO con questo JSON (nessun testo fuori dal JSON):
     if (!_centroZona && vals.zona) {
       _centroZona = await geocodeTappa(vals.zona, 'Sicilia');
     }
-    // Raggio dinamico: piu giorni = itinerario legittimamente piu esteso.
-    const _raggioMax = Math.min(40 + (vals.giorni || 3) * 20, 120);
+    // Raggio dinamico basato sulla COMPATTEZZA REALE della zona:
+    // si misura quanto sono sparsi i luoghi della zona nel dataset (distanza
+    // massima dal centro) e si concede un margine. Una zona circoscritta come
+    // le Madonie ottiene cosi un raggio stretto, la "Sicilia orientale" uno ampio.
+    // Un raggio basato solo sui giorni era troppo largo: la Vucciria (Palermo)
+    // dista 67 km dalle Madonie e passava il filtro.
+    let _estensioneZona = 0;
+    if (_centroZona && luoghiFiltrati.length > 0) {
+      luoghiFiltrati.forEach(function(p){
+        const c = Array.isArray(p.coords[0]) ? p.coords[0] : p.coords;
+        if (c && c.length === 2 && !isNaN(c[0])) {
+          const d = distanzaKm(_centroZona, c);
+          if (isFinite(d) && d > _estensioneZona) _estensioneZona = d;
+        }
+      });
+    }
+    // Margine: estensione della zona + 15 km, con minimo 25 e massimo 120.
+    // Se la zona non ha luoghi nel dataset si usa il criterio sui giorni.
+    const _raggioMax = _estensioneZona > 0
+      ? Math.min(Math.max(_estensioneZona + 15, 25), 120)
+      : Math.min(40 + (vals.giorni || 3) * 20, 120);
+    console.log('[Wizard] Zona: estensione ' + Math.round(_estensioneZona) + ' km, raggio ammesso ' + Math.round(_raggioMax) + ' km');
 
     let _scartateGeo = 0, _scartateFuori = 0;
     const tappeValide = tappeGrezze.filter(function(tp) {
