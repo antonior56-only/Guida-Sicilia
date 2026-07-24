@@ -2300,6 +2300,10 @@ box-shadow:0 4px 14px rgba(0,0,0,.15)">
           <p style="font-size:11px;color:var(--muted);margin:6px 0 10px;line-height:1.4" data-i18n="wz_picker_hint">
             Per sostituire una tappa: clicca "Cambia" e poi tocca un punto sulla mappa.
           </p>
+          <button class="btn btn-outline" onclick="verificaTappeWeb()" id="btn-verifica-tappe"
+                  style="width:100%;margin-bottom:8px;font-size:12px;border-color:var(--sage);color:var(--sage)"
+                  data-i18n="wz_verifica_web">🔎 Verifica tappe sul web</button>
+          <div id="wz-verifica-esito" style="display:none;font-size:12px;line-height:1.5;background:var(--cream);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:10px"></div>
           <div class="wz-save-row">
             <input type="text" id="wz-save-name" data-i18n-placeholder="wz_save_ph" placeholder="Nome itinerario…"/>
             <button class="btn-wz-save" onclick="salvaItinerarioWizard()" data-i18n="wz_btn_salva">💾 Salva</button>
@@ -3175,6 +3179,13 @@ const TRANSLATIONS = {
     pick_banner_testo: 'Clicca sul punto esatto della mappa',
     pick_banner_annulla: 'Annulla',
     settings_key_privacy: '\uD83D\uDD12 La chiave resta solo sul tuo dispositivo, non viene mai inviata ad altri.',
+    wz_tappe_scartate: 'tappe scartate perche non verificabili o fuori zona',
+    wz_verifica_web: '\uD83D\uDD0E Verifica tappe sul web',
+    wz_verifica_corso: 'Verifico...',
+    wz_verifica_err: 'Verifica non riuscita, riprova.',
+    ai_risposta_incompleta: "Risposta AI incompleta: recuperata la parte valida.",
+    ai_troppo_lunga: "Risposta troppo lunga per essere completata. Riprova con meno giorni.",
+    ai_json_non_valido: "L'AI ha risposto in un formato non valido. Riprova.",
   },
   en: {
     // Login
@@ -3563,6 +3574,13 @@ const TRANSLATIONS = {
     pick_banner_testo: 'Tap the exact spot on the map',
     pick_banner_annulla: 'Cancel',
     settings_key_privacy: '\uD83D\uDD12 Your key stays on your device only, it is never sent to anyone else.',
+    wz_tappe_scartate: 'stops removed: not verifiable or out of area',
+    wz_verifica_web: '\uD83D\uDD0E Check stops on the web',
+    wz_verifica_corso: 'Checking...',
+    wz_verifica_err: 'Check failed, try again.',
+    ai_risposta_incompleta: "Incomplete AI response: recovered the valid part.",
+    ai_troppo_lunga: "Response too long to complete. Try with fewer days.",
+    ai_json_non_valido: "The AI replied in an invalid format. Please try again.",
   }
 };
 
@@ -7352,6 +7370,7 @@ function askForApiKeyModal() {
 // SELEZIONE MODELLO AI: manuale (override) o auto-discovery
 // ═══════════════════════════════════════════════════════
 // Lista di preferenza (dal migliore al fallback)
+const TEMPERATURA_AI = 0.2; // accuratezza > creativita per guide e itinerari
 const MODELLI_PREFERITI = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest', 'gemini-1.5-flash'];
 
 async function getModelloAI(activeKey) {
@@ -7468,6 +7487,10 @@ async function fetchGeminiGrounded(payload, retryCount = 0) {
   // Tool di grounding: nome diverso per i modelli 1.5
   const toolName = model.indexOf('gemini-1.5') === 0 ? 'google_search_retrieval' : 'google_search';
   const groundedPayload = JSON.parse(JSON.stringify(payload));
+  groundedPayload.generationConfig = groundedPayload.generationConfig || {};
+  if (groundedPayload.generationConfig.temperature === undefined) {
+    groundedPayload.generationConfig.temperature = TEMPERATURA_AI;
+  }
   groundedPayload.tools = [{ [toolName]: {} }];
 
   const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + activeKey;
@@ -7534,6 +7557,57 @@ function renderGroundingBadge(verified, sources) {
 }
 
 
+// ═══════════════════════════════════════════════════════
+// PARSING JSON TOLLERANTE AI TRONCAMENTI
+// Se il modello esaurisce i token mentre scrive, la risposta arriva
+// tagliata a meta parola: JSON.parse fallisce con un errore criptico.
+// Qui si recupera la porzione valida (meglio un itinerario di 3 giorni
+// su 5 che un errore secco).
+// ═══════════════════════════════════════════════════════
+function _riparaJsonTroncato(str) {
+  let inStr = false, esc = false, lastSafe = -1;
+  for (let i = 0; i < str.length; i++) {
+    const c = str[i];
+    if (esc) { esc = false; continue; }
+    if (c === '\\') { esc = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === '}' || c === ']') lastSafe = i;
+  }
+  if (lastSafe < 0) return null;
+  let out = str.slice(0, lastSafe + 1);
+  const stack = []; inStr = false; esc = false;
+  for (let i = 0; i < out.length; i++) {
+    const c = out[i];
+    if (esc) { esc = false; continue; }
+    if (c === '\\') { esc = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === '{' || c === '[') stack.push(c);
+    else if (c === '}' || c === ']') stack.pop();
+  }
+  while (stack.length) out += (stack.pop() === '{' ? '}' : ']');
+  return out.replace(/,\s*([}\]])/g, '$1');
+}
+
+function parseJsonAI(testo, troncata) {
+  let s = (testo || '').trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+  try { return JSON.parse(s); } catch (e) {
+    const riparato = _riparaJsonTroncato(s);
+    if (riparato) {
+      try {
+        const obj = JSON.parse(riparato);
+        console.warn('[AI] risposta JSON troncata: recuperata la parte valida');
+        if (typeof showToast === 'function') showToast('\u26a0\ufe0f ' + t('ai_risposta_incompleta'));
+        return obj;
+      } catch (e2) {}
+    }
+    if (troncata) throw new Error(t('ai_troppo_lunga'));
+    throw new Error(t('ai_json_non_valido'));
+  }
+}
+
+
 async function fetchGeminiWithRetry(payload, isJson = false, isVision = false, retryCount = 0, jsonSchema = null) {
   const MAX_RETRIES = 2;
   let activeKey = localStorage.getItem('sicilia_gemini_key') || apiKey;
@@ -7544,6 +7618,13 @@ async function fetchGeminiWithRetry(payload, isJson = false, isVision = false, r
     if (!newKey) throw new Error("API Key annullata");
     localStorage.setItem('sicilia_gemini_key', newKey);
     activeKey = newKey;
+  }
+
+  // Temperatura bassa di default: per guide e itinerari serve accuratezza,
+  // non creativita. Il chiamante puo comunque imporre un valore proprio.
+  payload.generationConfig = payload.generationConfig || {};
+  if (payload.generationConfig.temperature === undefined) {
+    payload.generationConfig.temperature = TEMPERATURA_AI;
   }
 
   if (isJson) {
@@ -7593,14 +7674,10 @@ async function fetchGeminiWithRetry(payload, isJson = false, isVision = false, r
   const data = await response.json();
   const textResult = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!textResult) throw new Error("Risposta vuota o non valida dall'API");
-  // FIX: JSON.parse protetto da eccezioni di parsing
-  if (isJson) {
-    try {
-      return JSON.parse(textResult);
-    } catch (parseErr) {
-      throw new Error("Risposta AI non è JSON valido: " + parseErr.message);
-    }
-  }
+  // Rileva il troncamento: il modello ha esaurito il budget di token
+  const troncata = (data.candidates && data.candidates[0] && data.candidates[0].finishReason === 'MAX_TOKENS');
+  if (troncata) console.warn('[AI] finishReason=MAX_TOKENS: risposta troncata');
+  if (isJson) return parseJsonAI(textResult, troncata);
   return textResult;
 }
 
@@ -7799,7 +7876,9 @@ function wzFiltraLuoghiPerZona(zona) {
 async function geocodeTappa(nome, zonaHint) {
   const query = `${nome}, ${zonaHint || 'Sicilia'}, Italy`;
   try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
+    // BBOX + bounded=1: cerca SOLO dentro la Sicilia. Un luogo non trovato qui
+    // e quasi sempre inventato, non semplicemente "altrove".
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&viewbox=${BBOX_SICILIA}&bounded=1&q=${encodeURIComponent(query)}`;
     const res = await fetchTimeout(url, { headers: { 'Accept-Language': 'it' } }, 8000);
     const data = await res.json();
     if (data && data[0]) {
@@ -7808,6 +7887,76 @@ async function geocodeTappa(nome, zonaHint) {
   } catch(e) {}
   return null;
 }
+
+// ═══════════════════════════════════════════════════════
+// MATCHING TAPPE ↔ LUOGHI DEL DATASET
+// Il vecchio matching usava la PRIMA PAROLA del nome in dataset:
+// per "A Sud Noto" la prima parola e "a", contenuta in quasi ogni nome
+// italiano -> quasi tutte le tappe venivano dirottate su quel luogo,
+// mostrando il nome di un posto e la descrizione di un altro.
+// Ora: confronto per insiemi di parole significative (Jaccard) con soglia.
+// Meglio NESSUN match che un match sbagliato: una tappa senza corrispondenza
+// viene geocodificata e resta se stessa.
+// ═══════════════════════════════════════════════════════
+const _STOPWORDS_LUOGHI = new Set(['di','del','della','dello','dei','degli','delle','da','dal','a','al','allo','alla','ai','agli','alle','il','lo','la','i','gli','le','e','ed','in','su','per','con','tra','fra','un','una','uno','san','santa','santo','sant','ss','centro','storico','borgo','localita','loc']);
+
+function _normNomeLuogo(str) {
+  return (str || '').toString().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/['\u2019`]/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
+function _tokenNomeLuogo(str) {
+  return _normNomeLuogo(str).split(' ').filter(function(w){ return w.length > 1 && !_STOPWORDS_LUOGHI.has(w); });
+}
+function _simNomeLuogo(a, b) {
+  const A = new Set(_tokenNomeLuogo(a)), B = new Set(_tokenNomeLuogo(b));
+  if (!A.size || !B.size) return 0;
+  let inter = 0;
+  A.forEach(function(x){ if (B.has(x)) inter++; });
+  return inter / (A.size + B.size - inter);
+}
+function trovaLuogoPerNome(nome, allRef) {
+  const n = _normNomeLuogo(nome);
+  if (!n) return null;
+  const esatto = allRef.find(function(p){ return _normNomeLuogo(p.name) === n; });
+  if (esatto) return esatto;
+  let best = null, bestScore = 0;
+  allRef.forEach(function(p){
+    const sc = _simNomeLuogo(nome, p.name);
+    if (sc > bestScore) { bestScore = sc; best = p; }
+  });
+  return bestScore >= 0.6 ? best : null;
+}
+
+// Verifica delle tappe generate tramite ricerca Google (grounding).
+// Chiamata a TESTO LIBERO: il tool di ricerca non convive con responseSchema/
+// responseMimeType JSON, quindi NON va agganciato alla generazione del wizard.
+async function verificaTappeWeb() {
+  if (!wzTappeCorrente || !wzTappeCorrente.length) { showToast(t('wz_nessun_risultato')); return; }
+  const btn = document.getElementById('btn-verifica-tappe');
+  const box = document.getElementById('wz-verifica-esito');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner" style="border-top-color:var(--sage)"></span> ' + t('wz_verifica_corso'); }
+  try {
+    const elenco = wzTappeCorrente.map(function(tp, i){ return (i+1) + '. ' + tp.nome; }).join('\n');
+    const prompt = 'Verifica se questi luoghi in Sicilia esistono realmente e sono visitabili.\n' + elenco
+      + '\n\nPer ciascuno indica su una riga: numero, nome, ESISTE oppure NON TROVATO, e una precisazione brevissima. '
+      + 'Non aggiungere orari o prezzi. ' + getPromptAntiAllucinazione();
+    const payload = { contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: 1200, temperature: 0, thinkingConfig: { thinkingBudget: 0 } } };
+    const ris = await fetchGeminiGrounded(payload);
+    if (box) {
+      box.style.display = 'block';
+      box.innerHTML = escapeHtmlItin(ris.text || '').replace(/\n/g, '<br>') + renderGroundingBadge(ris.verified, ris.sources);
+    }
+  } catch(e) {
+    showToast('\u26a0\ufe0f ' + t('wz_verifica_err'));
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '\uD83D\uDD0E ' + t('wz_verifica_web'); }
+  }
+}
+
 
 async function generaItinerarioWizard() {
   const vals = wzGetValues();
@@ -7822,6 +7971,10 @@ async function generaItinerarioWizard() {
     `"${p.name}" (${p.comune||p.prov||'Sicilia'}, ${p.cat||p.tipo||''}, tags:[${(p.tags||[]).join(',')}])`
   ).join('; ');
   const haLuoghiZona = appPlaces.length > 0;
+  // Whitelist stretta: se la zona ha abbastanza luoghi salvati, l'AI usa SOLO quelli
+  // (invenzioni impossibili per costruzione; prezzo: itinerari meno vari).
+  const SOGLIA_WHITELIST = 25;
+  const whitelistStretta = appPlaces.length >= SOGLIA_WHITELIST;
 
   const budgetMap = { economico: currentLang==='en'?'budget':'economico', medio: currentLang==='en'?'mid-range':'medio', alto: currentLang==='en'?'luxury':'alto' };
   const chiMap    = { solo: currentLang==='en'?'solo traveller':'viaggiatore solo', coppia: currentLang==='en'?'couple':'coppia', famiglia: currentLang==='en'?'family with children':'famiglia con bambini', amici: currentLang==='en'?'group of friends':'gruppo di amici' };
@@ -7831,22 +7984,34 @@ async function generaItinerarioWizard() {
 Crea un itinerario di ${vals.giorni} giorni per: ${chiMap[vals.chi]}, budget ${budgetMap[vals.budget]}, interessi: ${vals.interessi.join(', ') || 'generali'}.
 === VINCOLO GEOGRAFICO OBBLIGATORIO ===\nZONA BASE: ${vals.zona || 'Sicilia intera'}.\nREGOLE: 1) TUTTE le tappe nella zona di ${vals.zona || 'Sicilia'} o entro 30-40 km. Se zona = una citta, resta in quella citta e dintorni. 2) NON tappe in zone lontane (zona Palermo => NIENTE Catania/Siracusa/Taormina). 3) Ogni giornata COMPATTA: tappe dello stesso giorno entro 20-25 km tra loro. 4) Ordina le tappe del giorno per vicinanza (nearest-neighbor).
 
-${haLuoghiZona
-  ? 'Questi luoghi della zona sono GIA presenti nell\'app — usali con PRIORITA quando pertinenti (copia il nome ESATTO):\n' + luoghiAppStr + '.\nPuoi integrare con altri luoghi REALI della zona non presenti nell\'elenco, marcandoli con "esterno": true.'
-  : 'Nell\'app NON ci sono ancora luoghi salvati per questa zona. Usa la tua conoscenza per proporre luoghi REALI ed esistenti di ' + (vals.zona || 'questa zona della Sicilia') + ' (monumenti, chiese, piazze, musei, natura, ristoranti tipici). Marca TUTTE queste tappe con "esterno": true. NON inventare luoghi inesistenti.'
+${whitelistStretta
+  ? 'Usa PRINCIPALMENTE i luoghi di questo elenco, copiando il nome ESATTO (l\'elenco e ricco, dovrebbe bastare):\n' + luoghiAppStr + '.\nSolo se serve per completare una giornata puoi aggiungere altri luoghi REALI e famosi della zona, marcandoli "esterno": true.'
+  : (haLuoghiZona
+    ? 'Questi luoghi della zona sono GIA presenti nell\'app — usali con PRIORITA quando pertinenti (copia il nome ESATTO):\n' + luoghiAppStr + '.\nPuoi integrare con altri luoghi REALI della zona non presenti nell\'elenco, marcandoli con "esterno": true.'
+    : 'Nell\'app NON ci sono ancora luoghi salvati per questa zona. Usa la tua conoscenza per proporre luoghi REALI ed esistenti di ' + (vals.zona || 'questa zona della Sicilia') + ' (monumenti, chiese, piazze, musei, natura, ristoranti tipici). Marca TUTTE queste tappe con "esterno": true.')
 }
-Distribuisci le tappe nei giorni rispettando i VINCOLI GEOGRAFICI sopra (max 4 tappe/giorno, ogni giorno compatto e vicino). IMPORTANTE: ogni luogo deve comparire UNA SOLA VOLTA in tutto l'itinerario, NON ripetere mai lo stesso posto. Includi almeno 1 ristorante per giorno se possibile, vicino alle altre tappe dello stesso giorno.
+
+=== QUALITA RICHIESTA ===
+Le note devono essere INFORMATIVE e invoglianti: cosa si vede, perche vale la pena, un dettaglio caratteristico.
+Evita note generiche tipo "bel posto" o "da visitare".
+
+=== DIVIETI ASSOLUTI ===
+1) NON inventare luoghi: ogni tappa deve essere un posto REALE e verificabile, noto con quel nome. Se non sei certo che esista, NON inserirlo.
+2) Il campo "nota" deve descrivere SOLO ed ESCLUSIVAMENTE il luogo di quella tappa. Non attribuire a una tappa la descrizione di un altro posto.
+3) NON indicare orari di apertura, giorni di chiusura, prezzi, costi di biglietti o tariffe: sono informazioni che cambiano e non puoi verificarle.
+4) Il campo "orario" e SOLO l'ora suggerita per la visita (es. "09:30"), NON l'orario di apertura della struttura.
+Distribuisci le tappe nei giorni rispettando i VINCOLI GEOGRAFICI sopra (4-5 tappe per giorno, ogni giorno compatto e vicino). IMPORTANTE: ogni luogo deve comparire UNA SOLA VOLTA in tutto l'itinerario, NON ripetere mai lo stesso posto. Includi almeno 1 ristorante per giorno se possibile, vicino alle altre tappe dello stesso giorno.
 
 Rispondi SOLO con questo JSON (nessun testo fuori dal JSON):
 {
   "name": "Nome evocativo itinerario",
-  "desc": "Una frase descrittiva",
+  "desc": "Descrizione accattivante dell'itinerario (2-3 frasi)",
   "giorni": [
     {
       "g": 1,
       "titolo": "Titolo giornata",
       "tappe": [
-        {"nome": "Nome luogo", "orario": "10:00", "nota": "Breve nota (max 20 parole)", "esterno": false},
+        {"nome": "Nome luogo", "orario": "10:00", "nota": "Nota descrittiva del luogo (max 25 parole)", "esterno": false},
         {"nome": "Altro luogo non in app", "orario": "15:00", "nota": "Breve nota", "esterno": true}
       ]
     }
@@ -7856,7 +8021,7 @@ Rispondi SOLO con questo JSON (nessun testo fuori dal JSON):
   const payload = {
     contents: [{ parts: [{ text: `Crea itinerario CONCENTRATO nella zona ${vals.zona||'Sicilia'} (tappe vicine, niente lunghi spostamenti): ${vals.giorni} giorni, ${vals.chi}, ${vals.budget}, interessi: ${vals.interessi.join(',')||'vari'}` }] }],
     systemInstruction: { parts: [{ text: systemPrompt }] },
-    generationConfig: { maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: 0 }, responseMimeType: 'application/json' }
+    generationConfig: { maxOutputTokens: 8192, temperature: 0, thinkingConfig: { thinkingBudget: 0 }, responseMimeType: 'application/json' }
   };
 
   try {
@@ -7875,8 +8040,7 @@ Rispondi SOLO con questo JSON (nessun testo fuori dal JSON):
         // Salta duplicati (stesso nome gia inserito nell'itinerario)
         if (_nomiVisti.has(tL)) return;
         _nomiVisti.add(tL);
-        const match = allRef.find(p => p.name.toLowerCase() === tL)
-                   || allRef.find(p => p.name.toLowerCase().includes(tL) || tL.includes(p.name.toLowerCase().split(' ')[0]));
+        const match = trovaLuogoPerNome(tp.nome, allRef);
         tappeGrezze.push({
           nome:     match ? match.name : (tp.nome||''),
           giorno:   gObj.g || 1,
@@ -7897,13 +8061,49 @@ Rispondi SOLO con questo JSON (nessun testo fuori dal JSON):
       btn.innerHTML = `<span class="spinner" style="border-top-color:#fff"></span> ${t('wz_geocodifica')}`;
       for (const tp of esterne) {
         const coords = await geocodeTappa(tp.nome, vals.zona || 'Sicilia');
-        tp.coords = coords; // null se non trovate — gestito in wzRenderTappe
+        tp.coords = coords;
         // Piccola pausa per rispettare Nominatim rate limit (1 req/s)
         await new Promise(r => setTimeout(r, 1100));
       }
     }
 
-    wzTappeCorrente = tappeGrezze;
+    // ── FILTRI ANTI-INVENZIONE ──────────────────────────────
+    // Il centro zona si calcola SOLO da dati indipendenti dall'output dell'AI
+    // (luoghi del dataset nella zona, o la zona geocodificata): se lo calcolassimo
+    // sulle tappe generate, una tappa sbagliata sposterebbe il centro verso di se
+    // e si autoassolverebbe.
+    let _centroZona = null;
+    if (luoghiFiltrati.length > 0) {
+      const cc = luoghiFiltrati.map(function(p){ return Array.isArray(p.coords[0]) ? p.coords[0] : p.coords; })
+                               .filter(function(c){ return c && c.length === 2 && !isNaN(c[0]); });
+      if (cc.length) {
+        _centroZona = [ cc.reduce(function(s,c){return s+c[0];},0)/cc.length,
+                        cc.reduce(function(s,c){return s+c[1];},0)/cc.length ];
+      }
+    }
+    if (!_centroZona && vals.zona) {
+      _centroZona = await geocodeTappa(vals.zona, 'Sicilia');
+    }
+    // Raggio dinamico: piu giorni = itinerario legittimamente piu esteso.
+    const _raggioMax = Math.min(40 + (vals.giorni || 3) * 20, 120);
+
+    let _scartateGeo = 0, _scartateFuori = 0;
+    const tappeValide = tappeGrezze.filter(function(tp) {
+      // 2d: tappa esterna che Nominatim non trova in Sicilia -> quasi certamente inventata
+      if (tp.esterno && !tp.coords) { _scartateGeo++; console.warn('[Wizard] Scartata (non geocodificabile):', tp.nome); return false; }
+      // 2c: tappa troppo lontana dal centro zona
+      if (_centroZona && tp.coords) {
+        const d = distanzaKm(_centroZona, tp.coords);
+        if (isFinite(d) && d > _raggioMax) { _scartateFuori++; console.warn('[Wizard] Scartata (fuori zona, ' + Math.round(d) + ' km):', tp.nome); return false; }
+      }
+      return true;
+    });
+
+    if (tappeValide.length === 0) throw new Error('nessuna tappa valida');
+    const _tot = _scartateGeo + _scartateFuori;
+    if (_tot > 0) showToast('\u26a0\ufe0f ' + _tot + ' ' + t('wz_tappe_scartate'));
+
+    wzTappeCorrente = tappeValide;
     try {
       wzMostraRisultato(raw.name, raw.desc, vals);
     } catch(innerErr) {
